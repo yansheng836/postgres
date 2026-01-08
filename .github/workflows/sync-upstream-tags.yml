@@ -1,0 +1,82 @@
+name: Sync Upstream Tags
+
+on:
+  workflow_dispatch:  # 允许手动触发
+  schedule:
+    - cron: '0 2 * * 1'  # 每周一凌晨2点自动同步（可选）
+
+jobs:
+  sync-tags:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch: [master, gitstats-report]
+    
+    steps:
+      - name: Checkout current branch (${{ matrix.branch }})
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+          fetch-depth: 0  # 获取完整历史记录，包括所有tag
+
+      - name: Configure Git
+        run: |
+          git config user.name "yansheng836bot"
+          git config user.email "yansheng836bot@163.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/postgres/postgres.git || true
+          git fetch upstream --tags  # 获取上游所有tag
+
+      - name: Get latest upstream tags
+        id: get_tags
+        run: |
+          # 获取上游所有tag，按版本号排序
+          git fetch upstream --tags
+          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "")
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "Found latest tag: $LATEST_TAG"
+
+      - name: Check if tag exists locally
+        id: check_tag
+        run: |
+          if git rev-parse ${{ steps.get_tags.outputs.latest_tag }} >/dev/null 2>&1; then
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.get_tags.outputs.latest_tag }} already exists locally"
+          else
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.get_tags.outputs.latest_tag }} is new"
+          fi
+
+      - name: Sync tag to branch
+        if: steps.check_tag.outputs.tag_exists == 'false' && steps.get_tags.outputs.latest_tag != ''
+        run: |
+          # 创建或更新tag指向上游的commit
+          git tag -f ${{ steps.get_tags.outputs.latest_tag }} upstream/${{ matrix.branch }} 2>/dev/null || \
+          git tag ${{ steps.get_tags.outputs.latest_tag }} upstream/${{ matrix.branch }}
+          
+          # 将tag推送到origin
+          git push origin ${{ steps.get_tags.outputs.latest_tag }}
+          
+          echo "Successfully synced tag ${{ steps.get_tags.outputs.latest_tag }} to ${{ matrix.branch }} branch"
+
+      - name: Sync all missing tags
+        run: |
+          # 同步所有本地缺失的tag
+          git fetch upstream --tags
+          for tag in $(git ls-remote --tags upstream | grep -v {} | cut -f 2 | sed 's/refs\/tags\///'); do
+            if ! git rev-parse $tag >/dev/null 2>&1; then
+              echo "Syncing missing tag: $tag"
+              git tag $tag upstream/${{ matrix.branch }}
+              git push origin $tag
+            fi
+          done
+
+      - name: Update branch to latest upstream
+        run: |
+          # 将当前分支更新到上游最新状态
+          git fetch upstream ${{ matrix.branch }}
+          git merge --ff-only upstream/${{ matrix.branch }} || echo "Fast-forward not possible, skipping merge"
+          git push origin ${{ matrix.branch }}
+          
