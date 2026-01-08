@@ -10,7 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        branch: [master, gitstats-report]
+        #branch: [master, gitstats-report]
+        branch: [master]
     
     steps:
       - name: Checkout current branch (${{ matrix.branch }})
