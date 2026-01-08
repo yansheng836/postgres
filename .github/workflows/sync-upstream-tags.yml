@@ -73,6 +73,7 @@ jobs:
               git push origin $tag
             fi
           done
+          git push origin --tags
 
       - name: Update branch to latest upstream
         run: |
