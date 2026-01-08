@@ -4,7 +4,7 @@
  * src/backend/utils/adt/formatting.c
  *
  *
- *	 Portions Copyright (c) 1999-2025, PostgreSQL Global Development Group
+ *	 Portions Copyright (c) 1999-2026, PostgreSQL Global Development Group
  *
  *
  *	 TO_CHAR(); TO_TIMESTAMP(); TO_DATE(); TO_NUMBER();
@@ -68,17 +68,9 @@
 #include <math.h>
 #include <float.h>
 #include <limits.h>
-#include <wctype.h>
 
-#ifdef USE_ICU
-#include <unicode/ustring.h>
-#endif
-
-#include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
 #include "common/int.h"
-#include "common/unicode_case.h"
-#include "common/unicode_category.h"
 #include "mb/pg_wchar.h"
 #include "nodes/miscnodes.h"
 #include "parser/scansup.h"

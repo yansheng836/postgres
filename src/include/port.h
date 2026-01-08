@@ -3,7 +3,7 @@
  * port.h
  *	  Header for src/port/ compatibility functions.
  *
- * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/port.h
@@ -485,7 +485,7 @@ extern char *strsep(char **stringp, const char *delim);
 #endif
 
 #if !HAVE_DECL_TIMINGSAFE_BCMP
-extern int	timingsafe_bcmp(const void *b1, const void *b2, size_t len);
+extern int	timingsafe_bcmp(const void *b1, const void *b2, size_t n);
 #endif
 
 /*

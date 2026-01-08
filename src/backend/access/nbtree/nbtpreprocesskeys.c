@@ -3,7 +3,7 @@
  * nbtpreprocesskeys.c
  *	  Preprocessing for Postgres btree scan keys.
  *
- * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1406,7 +1406,7 @@ _bt_skiparray_strat_adjust(IndexScanDesc scan, ScanKey arraysk,
 }
 
 /*
- * Convert skip array's > low_compare key into a >= key
+ * Convert skip array's < high_compare key into a <= key
  */
 static void
 _bt_skiparray_strat_decrement(IndexScanDesc scan, ScanKey arraysk,
@@ -1464,7 +1464,7 @@ _bt_skiparray_strat_decrement(IndexScanDesc scan, ScanKey arraysk,
 }
 
 /*
- * Convert skip array's < low_compare key into a <= key
+ * Convert skip array's > low_compare key into a >= key
  */
 static void
 _bt_skiparray_strat_increment(IndexScanDesc scan, ScanKey arraysk,

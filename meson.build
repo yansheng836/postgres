@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, PostgreSQL Global Development Group
+# Copyright (c) 2022-2026, PostgreSQL Global Development Group
 
 # Entry point for building PostgreSQL with meson
 #
@@ -1030,7 +1030,7 @@ if liburing.found()
 
   if cc.has_function('io_uring_queue_init_mem',
       dependencies: liburing, args: test_c_args)
-    cdata.set('HAVE_LIBURING_QUEUE_INIT_MEM', 1)
+    cdata.set('HAVE_IO_URING_QUEUE_INIT_MEM', 1)
   endif
 
 endif
@@ -2523,7 +2523,11 @@ int main(void)
 }
 '''
 
-  if cc.links(prog, name: '__crc32cb, __crc32ch, __crc32cw, and __crc32cd without -march=armv8-a+crc',
+  # Vendor-supported versions of Windows for AArch64 require at least ARMv8.1,
+  # which is where CRC extension support became mandatory.  Thus, use it
+  # unconditionally on MSVC/AArch64.
+  if (host_cpu == 'aarch64' and cc.get_id() == 'msvc') or \
+        cc.links(prog, name: '__crc32cb, __crc32ch, __crc32cw, and __crc32cd without -march=armv8-a+crc',
       args: test_c_args)
     # Use ARM CRC Extension unconditionally
     cdata.set('USE_ARMV8_CRC32C', 1)
@@ -2626,13 +2630,11 @@ endif
 # XXX: Might be worth conditioning some checks on the OS, to avoid doing
 # unnecessary checks over and over, particularly on windows.
 header_checks = [
-  'atomic.h',
   'copyfile.h',
   'crtdefs.h',
   'execinfo.h',
   'getopt.h',
   'ifaddrs.h',
-  'mbarrier.h',
   'strings.h',
   'sys/epoll.h',
   'sys/event.h',
@@ -2678,14 +2680,6 @@ decl_checks += [
   ['strchrnul', 'string.h'],
   ['memset_s', 'string.h', '#define __STDC_WANT_LIB_EXT1__ 1'],
 ]
-
-# Check presence of some optional LLVM functions.
-if llvm.found()
-  decl_checks += [
-    ['LLVMCreateGDBRegistrationListener', 'llvm-c/ExecutionEngine.h'],
-    ['LLVMCreatePerfJITEventListener', 'llvm-c/ExecutionEngine.h'],
-  ]
-endif
 
 foreach c : decl_checks
   func = c.get(0)

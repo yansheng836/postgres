@@ -4,7 +4,7 @@
  *	  POSTGRES heap access method definitions.
  *
  *
- * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/heapam.h
@@ -293,7 +293,7 @@ typedef struct PruneFreezeResult
 	 * is only valid if we froze some tuples (nfrozen > 0), and all_frozen is
 	 * true.
 	 *
-	 * These are only set if the HEAP_PRUNE_FREEZE option is set.
+	 * These are only set if the HEAP_PAGE_PRUNE_FREEZE option is set.
 	 */
 	bool		all_visible;
 	bool		all_frozen;

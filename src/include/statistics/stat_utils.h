@@ -3,7 +3,7 @@
  * stat_utils.h
  *	  Extended statistics and selectivity estimation functions.
  *
- * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/statistics/stat_utils.h
@@ -35,7 +35,7 @@ extern bool stats_check_arg_pair(FunctionCallInfo fcinfo,
 								 int argnum1, int argnum2);
 
 extern void RangeVarCallbackForStats(const RangeVar *relation,
-									 Oid relId, Oid oldRelid, void *arg);
+									 Oid relId, Oid oldRelId, void *arg);
 
 extern bool stats_fill_fcinfo_from_arg_pairs(FunctionCallInfo pairs_fcinfo,
 											 FunctionCallInfo positional_fcinfo,

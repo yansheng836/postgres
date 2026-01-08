@@ -3,7 +3,7 @@
  * subscriptioncmds.c
  *		subscription catalog manipulation functions
  *
- * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -1287,7 +1287,7 @@ CheckAlterSubOption(Subscription *sub, const char *option,
 	 * retreat in the calculated xmin, necessitating additional handling.
 	 *
 	 * XXX To address the above race conditions, we can define
-	 * oldest_nonremovable_xid as FullTransactionID and adds the check to
+	 * oldest_nonremovable_xid as FullTransactionId and adds the check to
 	 * disallow retreating the conflict slot's xmin. For now, we kept the
 	 * implementation simple by disallowing change to the retain_dead_tuples,
 	 * but in the future we can change this after some more analysis.

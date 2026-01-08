@@ -3,7 +3,7 @@
  * postinit.c
  *	  postgres initialization utilities
  *
- * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -418,7 +418,7 @@ CheckMyDatabase(const char *name, bool am_superuser, bool override_allow_connect
 	ctype = TextDatumGetCString(datum);
 
 	/*
-	 * Historcally, we set LC_COLLATE from datcollate, as well. That's no
+	 * Historically, we set LC_COLLATE from datcollate, as well. That's no
 	 * longer necessary because all collation behavior is handled through
 	 * pg_locale_t.
 	 */

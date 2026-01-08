@@ -3,7 +3,7 @@
  * proc.c
  *	  routines to manage per-process shared memory data structure
  *
- * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1998,7 +1998,7 @@ ProcSendSignal(ProcNumber procNumber)
 	if (procNumber < 0 || procNumber >= ProcGlobal->allProcCount)
 		elog(ERROR, "procNumber out of range");
 
-	SetLatch(&ProcGlobal->allProcs[procNumber].procLatch);
+	SetLatch(&GetPGProcByNumber(procNumber)->procLatch);
 }
 
 /*

@@ -3,7 +3,7 @@
  * planner.c
  *	  The query optimizer external interface.
  *
- * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -7922,7 +7922,7 @@ apply_scanjoin_target_to_paths(PlannerInfo *root,
 	 * However, there are several cases when this optimization is not safe. If
 	 * the rel isn't partitioned, then none of the paths will be Append or
 	 * MergeAppend paths, so we should definitely not do this. If it is
-	 * parititoned but is a joinrel, it may have Append and MergeAppend paths,
+	 * partitioned but is a joinrel, it may have Append and MergeAppend paths,
 	 * but it can also have join paths that we can't afford to discard.
 	 *
 	 * Some care is needed, because we have to allow
