@@ -1,0 +1,92 @@
+name: tag-gitstats
+
+on:
+  pull_request:
+  push:
+    #branches: [ gitstats-report ] # 测试用
+    # run only against tags
+    tags:
+      - "*"
+  schedule:
+    - cron: '0 16 1 * *'  # 北京时间每月1号 00:00（UTC 16:00）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set Beijing Timezone
+      uses: szenius/set-timezone@v1.2
+      with:
+        timezoneLinux: "Asia/Shanghai"
+
+    # Check out repository under $GITHUB_WORKSPACE, so the job can access it
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with: 
+          ref: gitstats-report
+          #一般我们在 action 中都会先使用 checkout 来检出代码，然后进行操作，checkout action 在检出代码时默认只检出当前事件触发的 commit，而不是所有的 commit，从而导致 history 的丢失。参考 checkout 中的 fetch-depth 说明，如果没有指定 fetch-depth，默认为 1，即只检出最近的一次 commit（参考 git clone —depth 参数）
+          fetch-depth: 0 # 没有这个默认不包含提交历史
+          persist-credentials: true # 允许后续用默认凭据 push
+    # - name: Run log
+    #   run: git log
+
+    # Run using Python 3.8 for consistency and aiohttp
+    - name: Set up Python 3.12.7
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12.7'
+        architecture: 'x64'
+        #cache: 'pip'
+
+    # Install dependencies with `pip`
+    - name: Install requirements
+      run: |
+        python3 -m pip install gitstats==0.5.1
+        sudo apt update
+        sudo apt install gnuplot-x11
+        sudo apt install gnuplot
+        gnuplot --version
+
+    # Run main
+    - name: Generate GitStats Report
+      run: |
+        # 发现会报错：! [rejected]        v0.0.6-20251216-test -> v0.0.6-20251216-test  (would clobber existing tag)，原因：tag重复导致的，即 fetch-depth: 0 会包含历史提交和tag
+        # https://github.com/yansheng836/dcits-work/actions/runs/20253400159/job/58150173343 
+        #git pull origin --tags
+        python3 --version
+        gitstats ./ ./gitstats-report
+
+    # Commit all changed files to the repository
+    - name: Commit to the repo
+      run: |
+        echo 'Commit to the repo'
+        git config --global user.name "yansheng836bot"
+        git config --global user.email "yansheng836bot@163.com"
+        # 兼容git status中文乱码问题
+        git config --global core.quotepath false
+        # 配置 Git 自动处理换行符：git windows 有^M linux没有
+        # Windows 系统推荐设置：
+        # git config --global core.autocrlf true
+        # Linux/macOS 系统推荐设置
+        #git config --global core.autocrlf input
+        # 忽略行尾的回车
+        git config --global core.whitespace cr-at-eol
+
+        git status
+        git add .
+        # Force the build to succeed, even if no files were changed
+
+        #git commit -m 'Update generated files' || true
+        # 如果文件没有更新时
+        if [[ -n $(git status --porcelain) ]]; then
+            git commit -m "Update gitstats-report on $(date +'%Y-%m-%d %H:%M:%S')"
+            git push origin gitstats-report
+        else
+            echo '没改变，不提交'
+            #git commit --allow-empty -m 'Update generated files(no file change)'
+        fi
