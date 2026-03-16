@@ -226,6 +226,7 @@ extern XLogSegNo XLogGetLastRemovedSegno(void);
 extern XLogSegNo XLogGetOldestSegno(TimeLineID tli);
 extern void XLogSetAsyncXactLSN(XLogRecPtr asyncXactLSN);
 extern void XLogSetReplicationSlotMinimumLSN(XLogRecPtr lsn);
+extern XLogRecPtr XLogGetReplicationSlotMinimumLSN(void);
 
 extern void xlog_redo(struct XLogReaderState *record);
 extern void xlog_desc(StringInfo buf, struct XLogReaderState *record);
@@ -237,6 +238,7 @@ extern bool RecoveryInProgress(void);
 extern RecoveryState GetRecoveryState(void);
 extern bool XLogInsertAllowed(void);
 extern XLogRecPtr GetXLogInsertRecPtr(void);
+extern XLogRecPtr GetXLogInsertEndRecPtr(void);
 extern XLogRecPtr GetXLogWriteRecPtr(void);
 
 extern uint64 GetSystemIdentifier(void);
@@ -257,6 +259,7 @@ extern bool CreateRestartPoint(int flags);
 extern WALAvailability GetWALAvailability(XLogRecPtr targetLSN);
 extern void XLogPutNextOid(Oid nextOid);
 extern XLogRecPtr XLogRestorePoint(const char *rpName);
+extern XLogRecPtr XLogAssignLSN(void);
 extern void UpdateFullPageWrites(void);
 extern void GetFullPageWriteInfo(XLogRecPtr *RedoRecPtr_p, bool *doPageWrites_p);
 extern XLogRecPtr GetRedoRecPtr(void);

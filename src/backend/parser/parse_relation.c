@@ -1422,13 +1422,9 @@ buildNSItemFromLists(RangeTblEntry *rte, Index rtindex,
  * This is essentially just the same as table_openrv(), except that it caters
  * to some parser-specific error reporting needs, notably that it arranges
  * to include the RangeVar's parse location in any resulting error.
- *
- * Note: properly, lockmode should be declared LOCKMODE not int, but that
- * would require importing storage/lock.h into parse_relation.h.  Since
- * LOCKMODE is typedef'd as int anyway, that seems like overkill.
  */
 Relation
-parserOpenTable(ParseState *pstate, const RangeVar *relation, int lockmode)
+parserOpenTable(ParseState *pstate, const RangeVar *relation, LOCKMODE lockmode)
 {
 	Relation	rel;
 	ParseCallbackState pcbstate;
@@ -1571,15 +1567,11 @@ addRangeTableEntry(ParseState *pstate,
  * of AccessShareLock, RowShareLock, or RowExclusiveLock depending on the
  * RTE's role within the query.  The caller must hold that lock mode
  * or a stronger one.
- *
- * Note: properly, lockmode should be declared LOCKMODE not int, but that
- * would require importing storage/lock.h into parse_relation.h.  Since
- * LOCKMODE is typedef'd as int anyway, that seems like overkill.
  */
 ParseNamespaceItem *
 addRangeTableEntryForRelation(ParseState *pstate,
 							  Relation rel,
-							  int lockmode,
+							  LOCKMODE lockmode,
 							  Alias *alias,
 							  bool inh,
 							  bool inFromCl)
@@ -1891,6 +1883,7 @@ addRangeTableEntryForFunction(ParseState *pstate,
 			TupleDescInitEntryCollation(tupdesc,
 										(AttrNumber) 1,
 										exprCollation(funcexpr));
+			TupleDescFinalize(tupdesc);
 		}
 		else if (functypclass == TYPEFUNC_RECORD)
 		{
@@ -1948,6 +1941,7 @@ addRangeTableEntryForFunction(ParseState *pstate,
 
 				i++;
 			}
+			TupleDescFinalize(tupdesc);
 
 			/*
 			 * Ensure that the coldeflist defines a legal set of names (no
@@ -2016,7 +2010,7 @@ addRangeTableEntryForFunction(ParseState *pstate,
 							   0);
 			/* no need to set collation */
 		}
-
+		TupleDescFinalize(tupdesc);
 		Assert(natts == totalatts);
 	}
 	else

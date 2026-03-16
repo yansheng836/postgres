@@ -61,8 +61,6 @@ process_loadable_libraries(DbInfo *dbinfo, PGresult *res, void *arg)
 {
 	struct loadable_libraries_state *state = (struct loadable_libraries_state *) arg;
 
-	AssertVariableIsOfType(&process_loadable_libraries, UpgradeTaskProcessCB);
-
 	state->ress[dbinfo - old_cluster.dbarr.dbs] = res;
 	state->totaltups += PQntuples(res);
 }
@@ -85,7 +83,7 @@ get_loadable_libraries(void)
 	struct loadable_libraries_state state;
 	char	   *query;
 
-	state.ress = (PGresult **) pg_malloc(old_cluster.dbarr.ndbs * sizeof(PGresult *));
+	state.ress = pg_malloc_array(PGresult *, old_cluster.dbarr.ndbs);
 	state.totaltups = 0;
 
 	query = psprintf("SELECT DISTINCT probin "
@@ -107,7 +105,7 @@ get_loadable_libraries(void)
 	 * plugins.
 	 */
 	n_libinfos = state.totaltups + count_old_cluster_logical_slots();
-	os_info.libraries = (LibraryInfo *) pg_malloc(sizeof(LibraryInfo) * n_libinfos);
+	os_info.libraries = pg_malloc_array(LibraryInfo, n_libinfos);
 	totaltups = 0;
 
 	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)

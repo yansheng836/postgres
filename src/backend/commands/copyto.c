@@ -37,6 +37,7 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
+#include "utils/wait_event.h"
 
 /*
  * Represents the different dest cases we need to worry about at
@@ -454,6 +455,7 @@ CopySendEndOfRow(CopyToState cstate)
 	switch (cstate->copy_dest)
 	{
 		case COPY_FILE:
+			pgstat_report_wait_start(WAIT_EVENT_COPY_TO_WRITE);
 			if (fwrite(fe_msgbuf->data, fe_msgbuf->len, 1,
 					   cstate->copy_file) != 1 ||
 				ferror(cstate->copy_file))
@@ -486,6 +488,7 @@ CopySendEndOfRow(CopyToState cstate)
 							(errcode_for_file_access(),
 							 errmsg("could not write to COPY file: %m")));
 			}
+			pgstat_report_wait_end();
 			break;
 		case COPY_FRONTEND:
 			/* Dump the accumulated row as one CopyData message */

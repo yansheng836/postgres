@@ -47,7 +47,7 @@ static TupleTableSlot *SeqNext(SeqScanState *node);
  *		This is a workhorse for ExecSeqScan
  * ----------------------------------------------------------------
  */
-static TupleTableSlot *
+static pg_attribute_always_inline TupleTableSlot *
 SeqNext(SeqScanState *node)
 {
 	TableScanDesc scandesc;
@@ -86,7 +86,7 @@ SeqNext(SeqScanState *node)
 /*
  * SeqRecheck -- access method routine to recheck a tuple in EvalPlanQual
  */
-static bool
+static pg_attribute_always_inline bool
 SeqRecheck(SeqScanState *node, TupleTableSlot *slot)
 {
 	/*
@@ -244,7 +244,8 @@ ExecInitSeqScan(SeqScan *node, EState *estate, int eflags)
 	/* and create slot with the appropriate rowtype */
 	ExecInitScanTupleSlot(estate, &scanstate->ss,
 						  RelationGetDescr(scanstate->ss.ss_currentRelation),
-						  table_slot_callbacks(scanstate->ss.ss_currentRelation));
+						  table_slot_callbacks(scanstate->ss.ss_currentRelation),
+						  TTS_FLAG_OBEYS_NOT_NULL_CONSTRAINTS);
 
 	/*
 	 * Initialize result type and projection.

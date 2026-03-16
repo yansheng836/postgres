@@ -119,6 +119,9 @@ CreateExecutorState(void)
 	estate->es_rteperminfos = NIL;
 	estate->es_plannedstmt = NULL;
 	estate->es_part_prune_infos = NIL;
+	estate->es_part_prune_states = NIL;
+	estate->es_part_prune_results = NIL;
+	estate->es_unpruned_relids = NULL;
 
 	estate->es_junkFilter = NULL;
 
@@ -321,7 +324,7 @@ CreateExprContext(EState *estate)
 ExprContext *
 CreateWorkExprContext(EState *estate)
 {
-	Size		maxBlockSize = ALLOCSET_DEFAULT_MAXSIZE;
+	Size		maxBlockSize;
 
 	maxBlockSize = pg_prevpower2_size_t(work_mem * (Size) 1024 / 16);
 
@@ -711,7 +714,7 @@ ExecCreateScanSlotFromOuterPlan(EState *estate,
 	outerPlan = outerPlanState(scanstate);
 	tupDesc = ExecGetResultType(outerPlan);
 
-	ExecInitScanTupleSlot(estate, scanstate, tupDesc, tts_ops);
+	ExecInitScanTupleSlot(estate, scanstate, tupDesc, tts_ops, 0);
 }
 
 /* ----------------------------------------------------------------

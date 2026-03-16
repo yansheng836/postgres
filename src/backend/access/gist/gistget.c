@@ -64,11 +64,7 @@ gistkillitems(IndexScanDesc scan)
 	 * safe.
 	 */
 	if (BufferGetLSNAtomic(buffer) != so->curPageLSN)
-	{
-		UnlockReleaseBuffer(buffer);
-		so->numKilled = 0;		/* reset counter */
-		return;
-	}
+		goto unlock;
 
 	Assert(GistPageIsLeaf(page));
 
@@ -78,6 +74,17 @@ gistkillitems(IndexScanDesc scan)
 	 */
 	for (i = 0; i < so->numKilled; i++)
 	{
+		if (!killedsomething)
+		{
+			/*
+			 * Use the hint bit infrastructure to check if we can update the
+			 * page while just holding a share lock. If we are not allowed,
+			 * there's no point continuing.
+			 */
+			if (!BufferBeginSetHintBits(buffer))
+				goto unlock;
+		}
+
 		offnum = so->killedItems[i];
 		iid = PageGetItemId(page, offnum);
 		ItemIdMarkDead(iid);
@@ -87,9 +94,10 @@ gistkillitems(IndexScanDesc scan)
 	if (killedsomething)
 	{
 		GistMarkPageHasGarbage(page);
-		MarkBufferDirtyHint(buffer, true);
+		BufferFinishSetHintBits(buffer, true, true);
 	}
 
+unlock:
 	UnlockReleaseBuffer(buffer);
 
 	/*
@@ -223,7 +231,7 @@ gistindex_keytest(IndexScanDesc scan,
 									 key->sk_collation,
 									 PointerGetDatum(&de),
 									 key->sk_argument,
-									 Int16GetDatum(key->sk_strategy),
+									 UInt16GetDatum(key->sk_strategy),
 									 ObjectIdGetDatum(key->sk_subtype),
 									 PointerGetDatum(&recheck));
 
@@ -287,7 +295,7 @@ gistindex_keytest(IndexScanDesc scan,
 									 key->sk_collation,
 									 PointerGetDatum(&de),
 									 key->sk_argument,
-									 Int16GetDatum(key->sk_strategy),
+									 UInt16GetDatum(key->sk_strategy),
 									 ObjectIdGetDatum(key->sk_subtype),
 									 PointerGetDatum(&recheck));
 			*recheck_distances_p |= recheck;
@@ -402,8 +410,8 @@ gistScanPage(IndexScanDesc scan, GISTSearchItem *pageItem,
 
 	/*
 	 * We save the LSN of the page as we read it, so that we know whether it
-	 * safe to apply LP_DEAD hints to the page later. This allows us to drop
-	 * the pin for MVCC scans, which allows vacuum to avoid blocking.
+	 * is safe to apply LP_DEAD hints to the page later. This allows us to
+	 * drop the pin for MVCC scans, which allows vacuum to avoid blocking.
 	 */
 	so->curPageLSN = BufferGetLSNAtomic(buffer);
 

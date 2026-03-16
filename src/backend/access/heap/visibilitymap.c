@@ -116,6 +116,8 @@
 
 /* Mapping from heap block number to the right bit in the visibility map */
 #define HEAPBLK_TO_MAPBLOCK(x) ((x) / HEAPBLOCKS_PER_PAGE)
+#define HEAPBLK_TO_MAPBLOCK_LIMIT(x) \
+	(((x) + HEAPBLOCKS_PER_PAGE - 1) / HEAPBLOCKS_PER_PAGE)
 #define HEAPBLK_TO_MAPBYTE(x) (((x) % HEAPBLOCKS_PER_PAGE) / HEAPBLOCKS_PER_BYTE)
 #define HEAPBLK_TO_OFFSET(x) (((x) % HEAPBLOCKS_PER_BYTE) * BITS_PER_HEAPBLOCK)
 
@@ -240,10 +242,8 @@ visibilitymap_pin_ok(BlockNumber heapBlk, Buffer vmbuf)
  * You must pass a buffer containing the correct map page to this function.
  * Call visibilitymap_pin first to pin the right one. This function doesn't do
  * any I/O.
- *
- * Returns the state of the page's VM bits before setting flags.
  */
-uint8
+void
 visibilitymap_set(Relation rel, BlockNumber heapBlk, Buffer heapBuf,
 				  XLogRecPtr recptr, Buffer vmBuf, TransactionId cutoff_xid,
 				  uint8 flags)
@@ -320,7 +320,6 @@ visibilitymap_set(Relation rel, BlockNumber heapBlk, Buffer heapBuf,
 	}
 
 	LockBuffer(vmBuf, BUFFER_LOCK_UNLOCK);
-	return status;
 }
 
 /*
@@ -343,7 +342,7 @@ visibilitymap_set(Relation rel, BlockNumber heapBlk, Buffer heapBuf,
  *
  * rlocator is used only for debugging messages.
  */
-uint8
+void
 visibilitymap_set_vmbits(BlockNumber heapBlk,
 						 Buffer vmBuf, uint8 flags,
 						 const RelFileLocator rlocator)
@@ -386,8 +385,6 @@ visibilitymap_set_vmbits(BlockNumber heapBlk,
 		map[mapByte] |= (flags << mapOffset);
 		MarkBufferDirty(vmBuf);
 	}
-
-	return status;
 }
 
 /*
@@ -603,6 +600,21 @@ visibilitymap_prepare_truncate(Relation rel, BlockNumber nheapblocks)
 	}
 
 	return newnblocks;
+}
+
+/*
+ *	visibilitymap_truncation_length -
+ *			compute truncation length for visibility map
+ *
+ * Given a proposed truncation length for the main fork, compute the
+ * correct truncation length for the visibility map. Should return the
+ * same answer as visibilitymap_prepare_truncate(), but without modifying
+ * anything.
+ */
+BlockNumber
+visibilitymap_truncation_length(BlockNumber nheapblocks)
+{
+	return HEAPBLK_TO_MAPBLOCK_LIMIT(nheapblocks);
 }
 
 /*

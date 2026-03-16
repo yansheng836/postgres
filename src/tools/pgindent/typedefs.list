@@ -125,6 +125,7 @@ AnlIndexData
 AnyArrayType
 Append
 AppendPath
+AppendPathInput
 AppendRelInfo
 AppendState
 ApplyErrorCallbackArg
@@ -422,6 +423,7 @@ CatalogIdMapEntry
 CatalogIndexState
 ChangeVarNodes_callback
 ChangeVarNodes_context
+ChannelName
 CheckPoint
 CheckPointStmt
 CheckpointStatsData
@@ -598,6 +600,7 @@ CustomScanMethods
 CustomScanState
 CycleCtr
 DBState
+DbOidName
 DCHCacheEntry
 DEADLOCK_INFO
 DECountItem
@@ -709,6 +712,7 @@ EachState
 Edge
 EditableObjectType
 ElementsState
+ElidedNode
 EnableTimeoutParams
 EndDataPtrType
 EndDirectModify_function
@@ -802,6 +806,7 @@ ExtensibleNodeMethods
 ExtensionControlFile
 ExtensionInfo
 ExtensionLocation
+ExtensionSiblingCache
 ExtensionVersionInfo
 FDWCollateState
 FD_SET
@@ -1111,6 +1116,8 @@ GistSplitUnion
 GistSplitVector
 GistTsVectorOptions
 GistVacState
+GlobalChannelEntry
+GlobalChannelKey
 GlobalTransaction
 GlobalTransactionData
 GlobalVisHorizonKind
@@ -1178,6 +1185,7 @@ HashAggBatch
 HashAggSpill
 HashAllocFunc
 HashBuildState
+HashBulkDeleteStreamPrivate
 HashCompareFunc
 HashCopyFunc
 HashIndexStat
@@ -1580,6 +1588,7 @@ ListParsedLex
 ListenAction
 ListenActionKind
 ListenStmt
+ListenerEntry
 LoInfo
 LoadStmt
 LocalBufferLookupEnt
@@ -1739,6 +1748,7 @@ MultiSortSupport
 MultiSortSupportData
 MultiXactId
 MultiXactMember
+MultiXactMemberSlruReadContext
 MultiXactOffset
 MultiXactOffset32
 MultiXactStateData
@@ -1780,6 +1790,7 @@ Node
 NodeTag
 NonEmptyRange
 NoneCompressorState
+NotNullSource
 Notification
 NotificationList
 NotifyStmt
@@ -1833,9 +1844,9 @@ OldToNewMappingData
 OnCommitAction
 OnCommitItem
 OnConflictAction
+OnConflictActionState
 OnConflictClause
 OnConflictExpr
-OnConflictSetState
 OpClassCacheEnt
 OpExpr
 OpFamilyMember
@@ -1918,6 +1929,7 @@ PGdataValue
 PGlobjfuncs
 PGnotify
 PGoauthBearerRequest
+PGoauthBearerRequestV2
 PGpipelineStatus
 PGpromptOAuthDevice
 PGresAttDesc
@@ -2176,6 +2188,8 @@ PatternInfoArray
 Pattern_Prefix_Status
 Pattern_Type
 PendingFsyncEntry
+PendingListenAction
+PendingListenEntry
 PendingRelDelete
 PendingRelSync
 PendingUnlinkEntry
@@ -2482,6 +2496,7 @@ RecordCacheArrayEntry
 RecordCacheEntry
 RecordCompareData
 RecordIOData
+RecoveryConflictReason
 RecoveryLockEntry
 RecoveryLockXidEntry
 RecoveryPauseState
@@ -2569,8 +2584,11 @@ ReorderBufferTupleCidEnt
 ReorderBufferTupleCidKey
 ReorderBufferUpdateProgressTxnCB
 ReorderTuple
-RepOriginId
+RepackCommand
+RepackStmt
 ReparameterizeForeignPathByChild_function
+ReplOriginId
+ReplOriginXactState
 ReplaceVarsFromTargetList_context
 ReplaceVarsNoMatchOption
 ReplaceWrapOption
@@ -2750,6 +2768,7 @@ SetConstraintStateData
 SetConstraintTriggerData
 SetExprState
 SetFunctionReturnMode
+SetHintBitsState
 SetOp
 SetOpCmd
 SetOpPath
@@ -2797,6 +2816,7 @@ SharedTypmodTableEntry
 Sharedsort
 ShellTypeInfo
 ShippableCacheEntry
+ShmemAllocatorData
 ShippableCacheKey
 ShmemIndexEnt
 ShutdownForeignScan_function
@@ -2891,6 +2911,7 @@ SplitPoint
 SplitTextOutputData
 SplitVar
 StackElem
+StakindFlags
 StartDataPtrType
 StartLOPtrType
 StartLOsPtrType
@@ -2898,6 +2919,7 @@ StartReplicationCmd
 StartupStatusEnum
 StatEntry
 StatExtEntry
+StatApproxReadStreamPrivate
 StateFileChunk
 StatisticExtInfo
 StatsBuildData
@@ -2920,6 +2942,7 @@ SubLink
 SubLinkType
 SubOpts
 SubPlan
+SubPlanRTInfo
 SubPlanState
 SubRelInfo
 SubRemoveRels
@@ -3380,6 +3403,7 @@ X509_NAME
 X509_NAME_ENTRY
 X509_STORE
 X509_STORE_CTX
+X86FeatureId
 XLTW_Oper
 XLogCtlData
 XLogCtlInsert
@@ -3567,13 +3591,6 @@ colormaprange
 compare_context
 config_handle
 config_var_value
-conn_errorMessage_func
-conn_oauth_client_id_func
-conn_oauth_client_secret_func
-conn_oauth_discovery_uri_func
-conn_oauth_issuer_id_func
-conn_oauth_scope_func
-conn_sasl_state_func
 contain_aggs_of_level_context
 contain_placeholder_references_context
 convert_testexpr_context
@@ -3728,6 +3745,7 @@ gistxlogPageReuse
 gistxlogPageSplit
 gistxlogPageUpdate
 grouping_sets_data
+growable_trgm_array
 gseg_picksplit_item
 gss_OID_set
 gss_buffer_desc
@@ -3946,6 +3964,7 @@ pg_sha512_ctx
 pg_snapshot
 pg_special_case
 pg_stack_base_t
+pg_ternary
 pg_time_t
 pg_time_usec_t
 pg_tz
@@ -3965,6 +3984,39 @@ pg_uuid_t
 pg_wchar
 pg_wchar_tbl
 pgp_armor_headers_state
+pgpa_advice_item
+pgpa_advice_tag_type
+pgpa_advice_target
+pgpa_identifier
+pgpa_index_target
+pgpa_index_type
+pgpa_itm_type
+pgpa_jo_outcome
+pgpa_join_class
+pgpa_join_member
+pgpa_join_state
+pgpa_join_strategy
+pgpa_join_unroller
+pgpa_output_context
+pgpa_plan_walker_context
+pgpa_planner_state
+pgpa_qf_type
+pgpa_query_feature
+pgpa_ri_checker
+pgpa_ri_checker_key
+pgpa_scan
+pgpa_scan_strategy
+pgpa_sj_unique_rel
+pgpa_target_type
+pgpa_trove
+pgpa_trove_entry
+pgpa_trove_entry_element
+pgpa_trove_entry_hash
+pgpa_trove_entry_key
+pgpa_trove_lookup_type
+pgpa_trove_result
+pgpa_trove_slice
+pgpa_unrolled_join
 pgsocket
 pgsql_thing_t
 pgssEntry
@@ -4048,6 +4100,7 @@ qsort_comparator
 query_pathkeys_callback
 radius_attribute
 radius_packet
+RadixSortInfo
 rangeTableEntry_used_context
 rank_context
 rbt_allocfunc
@@ -4057,6 +4110,8 @@ rbt_freefunc
 reduce_outer_joins_partial_state
 reduce_outer_joins_pass1_state
 reduce_outer_joins_pass2_state
+refcount_hash
+refcount_iterator
 reference
 regc_wc_probefunc
 regex_arc_t
@@ -4073,6 +4128,7 @@ relopt_kind
 relopt_parse_elt
 relopt_real
 relopt_string
+relopt_ternary
 relopt_type
 relopt_value
 relopts_validator
@@ -4108,8 +4164,6 @@ security_class_t
 sem_t
 sepgsql_context_info_t
 sequence_magic
-set_conn_altsock_func
-set_conn_oauth_token_func
 set_join_pathlist_hook_type
 set_rel_pathlist_hook_type
 shared_ts_iter
@@ -4254,9 +4308,12 @@ va_list
 vacuumingOptions
 validate_string_relopt
 varatt_expanded
+varatt_external
+varatt_indirect
 varattrib_1b
 varattrib_1b_e
 varattrib_4b
+varlena
 vartag_external
 vbits
 verifier_context

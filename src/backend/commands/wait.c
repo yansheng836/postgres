@@ -236,7 +236,6 @@ ExecWaitStmt(ParseState *pstate, WaitStmt *stmt, DestReceiver *dest)
 
 					default:
 						elog(ERROR, "unexpected wait LSN type %d", lsnType);
-						pg_unreachable();
 				}
 			}
 			else
@@ -281,7 +280,6 @@ ExecWaitStmt(ParseState *pstate, WaitStmt *stmt, DestReceiver *dest)
 
 						default:
 							elog(ERROR, "unexpected wait LSN type %d", lsnType);
-							pg_unreachable();
 					}
 				}
 				else
@@ -311,7 +309,6 @@ ExecWaitStmt(ParseState *pstate, WaitStmt *stmt, DestReceiver *dest)
 
 						default:
 							elog(ERROR, "unexpected wait LSN type %d", lsnType);
-							pg_unreachable();
 					}
 				}
 			}
@@ -341,5 +338,6 @@ WaitStmtResultDesc(WaitStmt *stmt)
 	tupdesc = CreateTemplateTupleDesc(1);
 	TupleDescInitEntry(tupdesc, (AttrNumber) 1, "status",
 					   TEXTOID, -1, 0);
+	TupleDescFinalize(tupdesc);
 	return tupdesc;
 }

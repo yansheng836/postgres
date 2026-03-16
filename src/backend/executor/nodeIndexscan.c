@@ -443,8 +443,8 @@ static int
 reorderqueue_cmp(const pairingheap_node *a, const pairingheap_node *b,
 				 void *arg)
 {
-	ReorderTuple *rta = (ReorderTuple *) a;
-	ReorderTuple *rtb = (ReorderTuple *) b;
+	const ReorderTuple *rta = (const ReorderTuple *) a;
+	const ReorderTuple *rtb = (const ReorderTuple *) b;
 	IndexScanState *node = (IndexScanState *) arg;
 
 	/* exchange argument order to invert the sort order */
@@ -802,7 +802,7 @@ ExecEndIndexScan(IndexScanState *node)
 	{
 		IndexScanInstrumentation *winstrument;
 
-		Assert(ParallelWorkerNumber <= node->iss_SharedInfo->num_workers);
+		Assert(ParallelWorkerNumber < node->iss_SharedInfo->num_workers);
 		winstrument = &node->iss_SharedInfo->winstrument[ParallelWorkerNumber];
 
 		/*
@@ -938,7 +938,8 @@ ExecInitIndexScan(IndexScan *node, EState *estate, int eflags)
 	 */
 	ExecInitScanTupleSlot(estate, &indexstate->ss,
 						  RelationGetDescr(currentRelation),
-						  table_slot_callbacks(currentRelation));
+						  table_slot_callbacks(currentRelation),
+						  TTS_FLAG_OBEYS_NOT_NULL_CONSTRAINTS);
 
 	/*
 	 * Initialize result type and projection.

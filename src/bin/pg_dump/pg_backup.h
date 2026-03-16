@@ -68,6 +68,7 @@ enum _dumpPreparedQueries
 	PREPQUERY_DUMPCOMPOSITETYPE,
 	PREPQUERY_DUMPDOMAIN,
 	PREPQUERY_DUMPENUMTYPE,
+	PREPQUERY_DUMPEXTSTATSOBJSTATS,
 	PREPQUERY_DUMPFUNC,
 	PREPQUERY_DUMPOPR,
 	PREPQUERY_DUMPRANGETYPE,
@@ -312,7 +313,7 @@ extern void SetArchiveOptions(Archive *AH, DumpOptions *dopt, RestoreOptions *ro
 
 extern void ProcessArchiveRestoreOptions(Archive *AHX);
 
-extern void RestoreArchive(Archive *AHX);
+extern void RestoreArchive(Archive *AHX, bool append_data);
 
 /* Open an existing archive */
 extern Archive *OpenArchive(const char *FileSpec, const ArchiveFormat fmt);

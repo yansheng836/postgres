@@ -79,7 +79,7 @@ astreamer_verify_content_new(astreamer *next, verifier_context *context,
 	streamer->tblspc_oid = tblspc_oid;
 
 	if (!context->skip_checksums)
-		streamer->checksum_ctx = pg_malloc(sizeof(pg_checksum_context));
+		streamer->checksum_ctx = pg_malloc_object(pg_checksum_context);
 
 	return &streamer->base;
 }
@@ -268,7 +268,7 @@ member_compute_checksum(astreamer *streamer, astreamer_member *member,
 	mystreamer->checksum_bytes += len;
 
 	/* Feed these bytes to the checksum calculation. */
-	if (pg_checksum_update(checksum_ctx, (uint8 *) data, len) < 0)
+	if (pg_checksum_update(checksum_ctx, (const uint8 *) data, len) < 0)
 	{
 		report_backup_error(mystreamer->context,
 							"could not update checksum of file \"%s\"",

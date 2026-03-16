@@ -30,6 +30,7 @@
 #include "storage/proc.h"
 #include "storage/shmem.h"
 #include "utils/timestamp.h"
+#include "utils/wait_event.h"
 
 WalRcvData *WalRcv = NULL;
 
@@ -179,7 +180,7 @@ WalRcvStreaming(void)
 	}
 
 	if (state == WALRCV_STREAMING || state == WALRCV_STARTING ||
-		state == WALRCV_RESTARTING)
+		state == WALRCV_CONNECTING || state == WALRCV_RESTARTING)
 		return true;
 	else
 		return false;
@@ -211,11 +212,12 @@ ShutdownWalRcv(void)
 			stopped = true;
 			break;
 
+		case WALRCV_CONNECTING:
 		case WALRCV_STREAMING:
 		case WALRCV_WAITING:
 		case WALRCV_RESTARTING:
 			walrcv->walRcvState = WALRCV_STOPPING;
-			/* fall through */
+			pg_fallthrough;
 		case WALRCV_STOPPING:
 			walrcvpid = walrcv->pid;
 			break;

@@ -641,7 +641,7 @@ findDependentObjects(const ObjectAddress *object,
 					break;
 
 				/* Otherwise, treat this like an internal dependency */
-				/* FALL THRU */
+				pg_fallthrough;
 
 			case DEPENDENCY_INTERNAL:
 
@@ -894,6 +894,17 @@ findDependentObjects(const ObjectAddress *object,
 			otherObject.objectId == object->objectId &&
 			object->objectSubId == 0)
 			continue;
+
+		/*
+		 * Check that the dependent object is not in a shared catalog, which
+		 * is not supported by doDeletion().
+		 */
+		if (IsSharedRelation(otherObject.classId))
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot drop %s because %s depends on it",
+							getObjectDescription(object, false),
+							getObjectDescription(&otherObject, false))));
 
 		/*
 		 * Must lock the dependent object before recursing to it.
@@ -1238,7 +1249,7 @@ reportDependentObjects(const ObjectAddresses *targetObjects,
 static void
 DropObjectById(const ObjectAddress *object)
 {
-	int			cacheId;
+	SysCacheIdentifier cacheId;
 	Relation	rel;
 	HeapTuple	tup;
 
