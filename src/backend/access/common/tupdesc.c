@@ -246,10 +246,11 @@ CreateTupleDescCopy(TupleDesc tupdesc)
 
 	desc = CreateTemplateTupleDesc(tupdesc->natts);
 
-	/* Flat-copy the attribute array */
-	memcpy(TupleDescAttr(desc, 0),
-		   TupleDescAttr(tupdesc, 0),
-		   desc->natts * sizeof(FormData_pg_attribute));
+	/* Flat-copy the attribute array (unless there are no attributes) */
+	if (desc->natts > 0)
+		memcpy(TupleDescAttr(desc, 0),
+			   TupleDescAttr(tupdesc, 0),
+			   desc->natts * sizeof(FormData_pg_attribute));
 
 	/*
 	 * Since we're not copying constraints and defaults, clear fields
@@ -294,10 +295,11 @@ CreateTupleDescTruncatedCopy(TupleDesc tupdesc, int natts)
 
 	desc = CreateTemplateTupleDesc(natts);
 
-	/* Flat-copy the attribute array */
-	memcpy(TupleDescAttr(desc, 0),
-		   TupleDescAttr(tupdesc, 0),
-		   desc->natts * sizeof(FormData_pg_attribute));
+	/* Flat-copy the attribute array (unless there are no attributes) */
+	if (desc->natts > 0)
+		memcpy(TupleDescAttr(desc, 0),
+			   TupleDescAttr(tupdesc, 0),
+			   desc->natts * sizeof(FormData_pg_attribute));
 
 	/*
 	 * Since we're not copying constraints and defaults, clear fields
@@ -339,10 +341,11 @@ CreateTupleDescCopyConstr(TupleDesc tupdesc)
 
 	desc = CreateTemplateTupleDesc(tupdesc->natts);
 
-	/* Flat-copy the attribute array */
-	memcpy(TupleDescAttr(desc, 0),
-		   TupleDescAttr(tupdesc, 0),
-		   desc->natts * sizeof(FormData_pg_attribute));
+	/* Flat-copy the attribute array (unless there are no attributes) */
+	if (desc->natts > 0)
+		memcpy(TupleDescAttr(desc, 0),
+			   TupleDescAttr(tupdesc, 0),
+			   desc->natts * sizeof(FormData_pg_attribute));
 
 	for (i = 0; i < desc->natts; i++)
 	{
@@ -530,7 +533,17 @@ TupleDescFinalize(TupleDesc tupdesc)
 
 		off = att_nominal_alignby(off, cattr->attalignby);
 
-		cattr->attcacheoff = off;
+		/*
+		 * attcacheoff is an int16, so don't try to cache any offsets larger
+		 * than will fit in that type.  Any attributes which are offset more
+		 * than 2^15 are likely due to variable-length attributes.  Since we
+		 * don't cache offsets for or beyond variable-length attributes, using
+		 * an int16 rather than an int32 here is unlikely to cost us anything.
+		 */
+		if (off > PG_INT16_MAX)
+			break;
+
+		cattr->attcacheoff = (int16) off;
 
 		off += cattr->attlen;
 		firstNonCachedOffsetAttr = i + 1;

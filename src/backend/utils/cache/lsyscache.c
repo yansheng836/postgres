@@ -34,6 +34,8 @@
 #include "catalog/pg_opfamily.h"
 #include "catalog/pg_operator.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_propgraph_label.h"
+#include "catalog/pg_propgraph_property.h"
 #include "catalog/pg_publication.h"
 #include "catalog/pg_range.h"
 #include "catalog/pg_statistic.h"
@@ -1108,33 +1110,6 @@ get_attoptions(Oid relid, int16 attnum)
 		result = datumCopy(attopts, false, -1); /* text[] */
 
 	ReleaseSysCache(tuple);
-
-	return result;
-}
-
-/*
- * get_attnotnull
- *
- *		Given the relation id and the attribute number,
- *		return the "attnotnull" field from the attribute relation.
- */
-bool
-get_attnotnull(Oid relid, AttrNumber attnum)
-{
-	HeapTuple	tp;
-	bool		result = false;
-
-	tp = SearchSysCache2(ATTNUM,
-						 ObjectIdGetDatum(relid),
-						 Int16GetDatum(attnum));
-
-	if (HeapTupleIsValid(tp))
-	{
-		Form_pg_attribute att_tup = (Form_pg_attribute) GETSTRUCT(tp);
-
-		result = att_tup->attnotnull;
-		ReleaseSysCache(tp);
-	}
 
 	return result;
 }
@@ -3669,6 +3644,31 @@ get_range_collation(Oid rangeOid)
 }
 
 /*
+ * get_range_constructor2
+ *		Gets the 2-arg constructor for the given rangetype.
+ *
+ *	Raises an error if not found.
+ */
+RegProcedure
+get_range_constructor2(Oid rangeOid)
+{
+	HeapTuple	tp;
+
+	tp = SearchSysCache1(RANGETYPE, ObjectIdGetDatum(rangeOid));
+	if (HeapTupleIsValid(tp))
+	{
+		Form_pg_range rngtup = (Form_pg_range) GETSTRUCT(tp);
+		RegProcedure result;
+
+		result = rngtup->rngconstruct2;
+		ReleaseSysCache(tp);
+		return result;
+	}
+	else
+		elog(ERROR, "cache lookup failed for range type %u", rangeOid);
+}
+
+/*
  * get_range_multirange
  *		Returns the multirange type of a given range type
  *
@@ -3933,4 +3933,40 @@ get_subscription_name(Oid subid, bool missing_ok)
 	ReleaseSysCache(tup);
 
 	return subname;
+}
+
+char *
+get_propgraph_label_name(Oid labeloid)
+{
+	HeapTuple	tuple;
+	char	   *labelname;
+
+	tuple = SearchSysCache1(PROPGRAPHLABELOID, ObjectIdGetDatum(labeloid));
+	if (!tuple)
+	{
+		elog(ERROR, "cache lookup failed for label %u", labeloid);
+		return NULL;
+	}
+	labelname = pstrdup(NameStr(((Form_pg_propgraph_label) GETSTRUCT(tuple))->pgllabel));
+	ReleaseSysCache(tuple);
+
+	return labelname;
+}
+
+char *
+get_propgraph_property_name(Oid propoid)
+{
+	HeapTuple	tuple;
+	char	   *propname;
+
+	tuple = SearchSysCache1(PROPGRAPHPROPOID, ObjectIdGetDatum(propoid));
+	if (!tuple)
+	{
+		elog(ERROR, "cache lookup failed for property %u", propoid);
+		return NULL;
+	}
+	propname = pstrdup(NameStr(((Form_pg_propgraph_property) GETSTRUCT(tuple))->pgpname));
+	ReleaseSysCache(tuple);
+
+	return propname;
 }

@@ -787,6 +787,16 @@ set_rel_consider_parallel(PlannerInfo *root, RelOptInfo *rel,
 		case RTE_RESULT:
 			/* RESULT RTEs, in themselves, are no problem. */
 			break;
+
+		case RTE_GRAPH_TABLE:
+
+			/*
+			 * Shouldn't happen since these are replaced by subquery RTEs when
+			 * rewriting queries.
+			 */
+			Assert(false);
+			return;
+
 		case RTE_GROUP:
 			/* Shouldn't happen; we're only considering baserels here. */
 			Assert(false);
@@ -2823,7 +2833,7 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	/* Generate a subroot and Paths for the subquery */
 	plan_name = choose_plan_name(root->glob, rte->eref->aliasname, false);
 	rel->subroot = subquery_planner(root->glob, subquery, plan_name,
-									root, false, tuple_fraction, NULL);
+									root, NULL, false, tuple_fraction, NULL);
 
 	/* Isolate the params needed by this specific subplan */
 	rel->subplan_params = root->plan_params;

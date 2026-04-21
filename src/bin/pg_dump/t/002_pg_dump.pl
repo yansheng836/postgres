@@ -3131,6 +3131,18 @@ my %tests = (
 		},
 	},
 
+	'CREATE PROPERTY GRAPH propgraph' => {
+		create_order => 20,
+		create_sql => 'CREATE PROPERTY GRAPH dump_test.propgraph;',
+		regexp => qr/^
+			\QCREATE PROPERTY GRAPH dump_test.propgraph\E;
+			/xm,
+		like =>
+		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
+		unlike =>
+		  { exclude_dump_test_schema => 1, only_dump_measurement => 1, },
+	},
+
 	'CREATE PUBLICATION pub1' => {
 		create_order => 50,
 		create_sql => 'CREATE PUBLICATION pub1;',
@@ -3203,9 +3215,9 @@ my %tests = (
 	'CREATE PUBLICATION pub8' => {
 		create_order => 50,
 		create_sql =>
-		  'CREATE PUBLICATION pub8 FOR ALL TABLES EXCEPT TABLE (dump_test.test_table);',
+		  'CREATE PUBLICATION pub8 FOR ALL TABLES EXCEPT (TABLE dump_test.test_table);',
 		regexp => qr/^
-			\QCREATE PUBLICATION pub8 FOR ALL TABLES EXCEPT TABLE (ONLY dump_test.test_table) WITH (publish = 'insert, update, delete, truncate');\E
+			\QCREATE PUBLICATION pub8 FOR ALL TABLES EXCEPT (TABLE ONLY dump_test.test_table) WITH (publish = 'insert, update, delete, truncate');\E
 			/xm,
 		like => { %full_runs, section_post_data => 1, },
 	},
@@ -3213,9 +3225,9 @@ my %tests = (
 	'CREATE PUBLICATION pub9' => {
 		create_order => 50,
 		create_sql =>
-		  'CREATE PUBLICATION pub9 FOR ALL TABLES EXCEPT TABLE (dump_test.test_table, dump_test.test_second_table);',
+		  'CREATE PUBLICATION pub9 FOR ALL TABLES EXCEPT (TABLE dump_test.test_table, dump_test.test_second_table);',
 		regexp => qr/^
-			\QCREATE PUBLICATION pub9 FOR ALL TABLES EXCEPT TABLE (ONLY dump_test.test_table, ONLY dump_test.test_second_table) WITH (publish = 'insert, update, delete, truncate');\E
+			\QCREATE PUBLICATION pub9 FOR ALL TABLES EXCEPT (TABLE ONLY dump_test.test_table, TABLE ONLY dump_test.test_second_table) WITH (publish = 'insert, update, delete, truncate');\E
 			/xm,
 		like => { %full_runs, section_post_data => 1, },
 	},
@@ -3223,9 +3235,9 @@ my %tests = (
 	'CREATE PUBLICATION pub10' => {
 		create_order => 92,
 		create_sql =>
-		  'CREATE PUBLICATION pub10 FOR ALL TABLES EXCEPT TABLE (dump_test.test_inheritance_parent);',
+		  'CREATE PUBLICATION pub10 FOR ALL TABLES EXCEPT (TABLE dump_test.test_inheritance_parent);',
 		regexp => qr/^
-			\QCREATE PUBLICATION pub10 FOR ALL TABLES EXCEPT TABLE (ONLY dump_test.test_inheritance_parent, ONLY dump_test.test_inheritance_child) WITH (publish = 'insert, update, delete, truncate');\E
+			\QCREATE PUBLICATION pub10 FOR ALL TABLES EXCEPT (TABLE ONLY dump_test.test_inheritance_parent, TABLE ONLY dump_test.test_inheritance_child) WITH (publish = 'insert, update, delete, truncate');\E
 			/xm,
 		like => { %full_runs, section_post_data => 1, },
 	},
@@ -4498,6 +4510,22 @@ my %tests = (
 						   TO regress_dump_test_role;',
 		regexp => qr/^
 			\QGRANT INSERT(col1) ON TABLE dump_test.test_second_table TO regress_dump_test_role;\E
+			/xm,
+		like =>
+		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },
+		unlike => {
+			exclude_dump_test_schema => 1,
+			no_privs => 1,
+			only_dump_measurement => 1,
+		},
+	},
+
+	'GRANT SELECT ON PROPERTY GRAPH propgraph' => {
+		create_order => 21,
+		create_sql =>
+		  'GRANT SELECT ON PROPERTY GRAPH dump_test.propgraph TO regress_dump_test_role;',
+		regexp => qr/^
+			\QGRANT ALL ON PROPERTY GRAPH dump_test.propgraph TO regress_dump_test_role;\E
 			/xm,
 		like =>
 		  { %full_runs, %dump_test_schema_runs, section_pre_data => 1, },

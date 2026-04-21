@@ -150,7 +150,7 @@ static void replace_vars_in_jointree(Node *jtnode,
 									 pullup_replace_vars_context *context);
 static Node *pullup_replace_vars(Node *expr,
 								 pullup_replace_vars_context *context);
-static Node *pullup_replace_vars_callback(Var *var,
+static Node *pullup_replace_vars_callback(const Var *var,
 										  replace_rte_variables_context *context);
 static Query *pullup_replace_vars_subquery(Query *query,
 										   pullup_replace_vars_context *context);
@@ -1418,6 +1418,7 @@ pull_up_simple_subquery(PlannerInfo *root, Node *jtnode, RangeTblEntry *rte,
 	subroot->glob = root->glob;
 	subroot->query_level = root->query_level;
 	subroot->plan_name = root->plan_name;
+	subroot->alternative_plan_name = root->alternative_plan_name;
 	subroot->parent_root = root->parent_root;
 	subroot->plan_params = NIL;
 	subroot->outer_params = NULL;
@@ -1630,6 +1631,10 @@ pull_up_simple_subquery(PlannerInfo *root, Node *jtnode, RangeTblEntry *rte,
 				case RTE_RESULT:
 				case RTE_GROUP:
 					/* these can't contain any lateral references */
+					break;
+				case RTE_GRAPH_TABLE:
+					/* shouldn't happen here */
+					Assert(false);
 					break;
 			}
 		}
@@ -2696,6 +2701,10 @@ replace_vars_in_jointree(Node *jtnode,
 						/* these shouldn't be marked LATERAL */
 						Assert(false);
 						break;
+					case RTE_GRAPH_TABLE:
+						/* shouldn't happen here */
+						Assert(false);
+						break;
 				}
 			}
 		}
@@ -2753,7 +2762,7 @@ pullup_replace_vars(Node *expr, pullup_replace_vars_context *context)
 }
 
 static Node *
-pullup_replace_vars_callback(Var *var,
+pullup_replace_vars_callback(const Var *var,
 							 replace_rte_variables_context *context)
 {
 	pullup_replace_vars_context *rcon = (pullup_replace_vars_context *) context->callback_arg;

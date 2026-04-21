@@ -89,7 +89,7 @@
  */
 typedef struct SubOpts
 {
-	bits32		specified_opts;
+	uint32		specified_opts;
 	char	   *slot_name;
 	char	   *synchronous_commit;
 	bool		connect;
@@ -150,7 +150,7 @@ static void CheckAlterSubOption(Subscription *sub, const char *option,
  */
 static void
 parse_subscription_options(ParseState *pstate, List *stmt_options,
-						   bits32 supported_opts, SubOpts *opts)
+						   uint32 supported_opts, SubOpts *opts)
 {
 	ListCell   *lc;
 
@@ -626,7 +626,7 @@ CreateSubscription(ParseState *pstate, CreateSubscriptionStmt *stmt,
 	char	   *conninfo;
 	char		originname[NAMEDATALEN];
 	List	   *publications;
-	bits32		supported_opts;
+	uint32		supported_opts;
 	SubOpts		opts = {0};
 	AclResult	aclresult;
 
@@ -753,7 +753,7 @@ CreateSubscription(ParseState *pstate, CreateSubscriptionStmt *stmt,
 		GetUserMapping(owner, server->serverid);
 
 		serverid = server->serverid;
-		conninfo = ForeignServerConnectionString(owner, serverid);
+		conninfo = ForeignServerConnectionString(owner, server);
 	}
 	else
 	{
@@ -797,7 +797,7 @@ CreateSubscription(ParseState *pstate, CreateSubscriptionStmt *stmt,
 		Int32GetDatum(opts.maxretention);
 	values[Anum_pg_subscription_subretentionactive - 1] =
 		Int32GetDatum(opts.retaindeadtuples);
-	values[Anum_pg_subscription_subserver - 1] = serverid;
+	values[Anum_pg_subscription_subserver - 1] = ObjectIdGetDatum(serverid);
 	if (!OidIsValid(serverid))
 		values[Anum_pg_subscription_subconninfo - 1] =
 			CStringGetTextDatum(conninfo);
@@ -1430,7 +1430,7 @@ AlterSubscription(ParseState *pstate, AlterSubscriptionStmt *stmt,
 	char	   *origin;
 	Subscription *sub;
 	Form_pg_subscription form;
-	bits32		supported_opts;
+	uint32		supported_opts;
 	SubOpts		opts = {0};
 
 	rel = table_open(SubscriptionRelationId, RowExclusiveLock);
@@ -1841,13 +1841,13 @@ AlterSubscription(ParseState *pstate, AlterSubscriptionStmt *stmt,
 							errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 							errmsg("subscription owner \"%s\" does not have permission on foreign server \"%s\"",
 								   GetUserNameFromId(form->subowner, false),
-								   ForeignServerName(new_server->serverid)));
+								   new_server->servername));
 
 				/* make sure a user mapping exists */
 				GetUserMapping(form->subowner, new_server->serverid);
 
 				conninfo = ForeignServerConnectionString(form->subowner,
-														 new_server->serverid);
+														 new_server);
 
 				/* Load the library providing us libpq calls. */
 				load_file("libpqwalreceiver", false);
@@ -1855,7 +1855,7 @@ AlterSubscription(ParseState *pstate, AlterSubscriptionStmt *stmt,
 				walrcv_check_conninfo(conninfo,
 									  sub->passwordrequired && !sub->ownersuperuser);
 
-				values[Anum_pg_subscription_subserver - 1] = new_server->serverid;
+				values[Anum_pg_subscription_subserver - 1] = ObjectIdGetDatum(new_server->serverid);
 				replaces[Anum_pg_subscription_subserver - 1] = true;
 
 				ObjectAddressSet(referenced, ForeignServerRelationId, new_server->serverid);
@@ -1873,7 +1873,7 @@ AlterSubscription(ParseState *pstate, AlterSubscriptionStmt *stmt,
 												   DEPENDENCY_NORMAL,
 												   ForeignServerRelationId, form->subserver);
 
-				values[Anum_pg_subscription_subserver - 1] = InvalidOid;
+				values[Anum_pg_subscription_subserver - 1] = ObjectIdGetDatum(InvalidOid);
 				replaces[Anum_pg_subscription_subserver - 1] = true;
 			}
 
@@ -2250,7 +2250,9 @@ DropSubscription(DropSubscriptionStmt *stmt, bool isTopLevel)
 	if (OidIsValid(form->subserver))
 	{
 		AclResult	aclresult;
+		ForeignServer *server;
 
+		server = GetForeignServer(form->subserver);
 		aclresult = object_aclcheck(ForeignServerRelationId, form->subserver,
 									form->subowner, ACL_USAGE);
 		if (aclresult != ACLCHECK_OK)
@@ -2263,12 +2265,12 @@ DropSubscription(DropSubscriptionStmt *stmt, bool isTopLevel)
 			 */
 			err = psprintf(_("subscription owner \"%s\" does not have permission on foreign server \"%s\""),
 						   GetUserNameFromId(form->subowner, false),
-						   ForeignServerName(form->subserver));
+						   server->servername);
 			conninfo = NULL;
 		}
 		else
 			conninfo = ForeignServerConnectionString(form->subowner,
-													 form->subserver);
+													 server);
 	}
 	else
 	{
@@ -2593,18 +2595,18 @@ AlterSubscriptionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 	 */
 	if (OidIsValid(form->subserver))
 	{
-		Oid			serverid = form->subserver;
+		ForeignServer *server = GetForeignServer(form->subserver);
 
-		aclresult = object_aclcheck(ForeignServerRelationId, serverid, newOwnerId, ACL_USAGE);
+		aclresult = object_aclcheck(ForeignServerRelationId, server->serverid, newOwnerId, ACL_USAGE);
 		if (aclresult != ACLCHECK_OK)
 			ereport(ERROR,
 					errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					errmsg("new subscription owner \"%s\" does not have permission on foreign server \"%s\"",
 						   GetUserNameFromId(newOwnerId, false),
-						   ForeignServerName(serverid)));
+						   server->servername));
 
 		/* make sure a user mapping exists */
-		GetUserMapping(newOwnerId, serverid);
+		GetUserMapping(newOwnerId, server->serverid);
 	}
 
 	form->subowner = newOwnerId;

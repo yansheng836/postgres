@@ -25,6 +25,7 @@
 #include "access/sysattr.h"
 #include "access/tableam.h"
 #include "access/toast_compression.h"
+#include "access/tupconvert.h"
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "access/xloginsert.h"
@@ -56,10 +57,10 @@
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
 #include "catalog/toasting.h"
-#include "commands/cluster.h"
 #include "commands/comment.h"
 #include "commands/defrem.h"
 #include "commands/event_trigger.h"
+#include "commands/repack.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
@@ -308,6 +309,12 @@ static const struct dropmsgstrings dropmsgstringarray[] = {
 		gettext_noop("index \"%s\" does not exist, skipping"),
 		gettext_noop("\"%s\" is not an index"),
 	gettext_noop("Use DROP INDEX to remove an index.")},
+	{RELKIND_PROPGRAPH,
+		ERRCODE_UNDEFINED_OBJECT,
+		gettext_noop("property graph \"%s\" does not exist"),
+		gettext_noop("property graph \"%s\" does not exist, skipping"),
+		gettext_noop("\"%s\" is not a property graph"),
+	gettext_noop("Use DROP PROPERTY GRAPH to remove a property graph.")},
 	{'\0', 0, NULL, NULL, NULL, NULL}
 };
 
@@ -694,7 +701,7 @@ static void ATExecEnableDisableTrigger(Relation rel, const char *trigname,
 									   LOCKMODE lockmode);
 static void ATExecEnableDisableRule(Relation rel, const char *rulename,
 									char fires_when, LOCKMODE lockmode);
-static void ATPrepAddInherit(Relation child_rel);
+static void ATPrepChangeInherit(Relation child_rel);
 static ObjectAddress ATExecAddInherit(Relation child_rel, RangeVar *parent, LOCKMODE lockmode);
 static ObjectAddress ATExecDropInherit(Relation rel, RangeVar *parent, LOCKMODE lockmode);
 static void drop_parent_dependency(Oid relid, Oid refclassid, Oid refobjid,
@@ -1550,7 +1557,7 @@ DropErrorMsgWrongType(const char *relname, char wrongkind, char rightkind)
 /*
  * RemoveRelations
  *		Implements DROP TABLE, DROP INDEX, DROP SEQUENCE, DROP VIEW,
- *		DROP MATERIALIZED VIEW, DROP FOREIGN TABLE
+ *		DROP MATERIALIZED VIEW, DROP FOREIGN TABLE, DROP PROPERTY GRAPH
  */
 void
 RemoveRelations(DropStmt *drop)
@@ -1612,6 +1619,10 @@ RemoveRelations(DropStmt *drop)
 
 		case OBJECT_FOREIGN_TABLE:
 			relkind = RELKIND_FOREIGN_TABLE;
+			break;
+
+		case OBJECT_PROPGRAPH:
+			relkind = RELKIND_PROPGRAPH;
 			break;
 
 		default:
@@ -4219,7 +4230,7 @@ RenameConstraint(RenameStmt *stmt)
 }
 
 /*
- * Execute ALTER TABLE/INDEX/SEQUENCE/VIEW/MATERIALIZED VIEW/FOREIGN TABLE
+ * Execute ALTER TABLE/INDEX/SEQUENCE/VIEW/MATERIALIZED VIEW/FOREIGN TABLE/PROPERTY GRAPH
  * RENAME
  */
 ObjectAddress
@@ -5164,7 +5175,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 		case AT_ClusterOn:		/* CLUSTER ON */
 		case AT_DropCluster:	/* SET WITHOUT CLUSTER */
 			ATSimplePermissions(cmd->subtype, rel,
-								ATT_TABLE | ATT_PARTITIONED_TABLE | ATT_MATVIEW);
+								ATT_TABLE | ATT_MATVIEW);
 			/* These commands never recurse */
 			/* No command-specific prep needed */
 			pass = AT_PASS_MISC;
@@ -5216,16 +5227,16 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			break;
 		case AT_AddInherit:		/* INHERIT */
 			ATSimplePermissions(cmd->subtype, rel,
-								ATT_TABLE | ATT_PARTITIONED_TABLE | ATT_FOREIGN_TABLE);
+								ATT_TABLE | ATT_FOREIGN_TABLE);
 			/* This command never recurses */
-			ATPrepAddInherit(rel);
+			ATPrepChangeInherit(rel);
 			pass = AT_PASS_MISC;
 			break;
 		case AT_DropInherit:	/* NO INHERIT */
 			ATSimplePermissions(cmd->subtype, rel,
-								ATT_TABLE | ATT_PARTITIONED_TABLE | ATT_FOREIGN_TABLE);
+								ATT_TABLE | ATT_FOREIGN_TABLE);
 			/* This command never recurses */
-			/* No command-specific prep needed */
+			ATPrepChangeInherit(rel);
 			pass = AT_PASS_MISC;
 			break;
 		case AT_AlterConstraint:	/* ALTER CONSTRAINT */
@@ -6047,6 +6058,7 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 			finish_heap_swap(tab->relid, OIDNewHeap,
 							 false, false, true,
 							 !OidIsValid(tab->newTableSpace),
+							 true,	/* reindex */
 							 RecentXmin,
 							 ReadNextMultiXactId(),
 							 persistence);
@@ -6184,7 +6196,7 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap)
 	EState	   *estate;
 	CommandId	mycid;
 	BulkInsertState bistate;
-	int			ti_options;
+	uint32		ti_options;
 	ExprState  *partqualstate = NULL;
 
 	/*
@@ -6400,7 +6412,8 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap)
 		 * checking all the constraints.
 		 */
 		snapshot = RegisterSnapshot(GetLatestSnapshot());
-		scan = table_beginscan(oldrel, snapshot, 0, NULL);
+		scan = table_beginscan(oldrel, snapshot, 0, NULL,
+							   SO_NONE);
 
 		/*
 		 * Switch to per-tuple memory context and reset it for each tuple
@@ -7617,7 +7630,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				 * Phase 3 will re-evaluate with hard errors, so the user gets
 				 * an error only if the table has rows.
 				 */
-				if (SOFT_ERROR_OCCURRED(&escontext))
+				if (escontext.error_occurred)
 				{
 					missingIsNull = true;
 					tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
@@ -8126,11 +8139,11 @@ ATExecSetNotNull(List **wqueue, Relation rel, char *conName, char *colName,
 	ccon = linitial(cooked);
 	ObjectAddressSet(address, ConstraintRelationId, ccon->conoid);
 
-	InvokeObjectPostAlterHook(RelationRelationId,
-							  RelationGetRelid(rel), attnum);
-
 	/* Mark pg_attribute.attnotnull for the column and queue validation */
 	set_attnotnull(wqueue, rel, attnum, true, true);
+
+	InvokeObjectPostAlterHook(RelationRelationId,
+							  RelationGetRelid(rel), attnum);
 
 	/*
 	 * Recurse to propagate the constraint to children that don't have one.
@@ -9775,7 +9788,7 @@ ATExecAddIndexConstraint(AlteredTableInfo *tab, Relation rel,
 	char	   *constraintName;
 	char		constraintType;
 	ObjectAddress address;
-	bits16		flags;
+	uint16		flags;
 
 	Assert(IsA(stmt, IndexStmt));
 	Assert(OidIsValid(index_oid));
@@ -12547,6 +12560,8 @@ ATExecAlterFKConstrEnforceability(List **wqueue, ATAlterConstraint *cmdcon,
 		fkconstraint->fk_matchtype = currcon->confmatchtype;
 		fkconstraint->fk_upd_action = currcon->confupdtype;
 		fkconstraint->fk_del_action = currcon->confdeltype;
+		fkconstraint->deferrable = currcon->condeferrable;
+		fkconstraint->initdeferred = currcon->condeferred;
 
 		/* Create referenced triggers */
 		if (currcon->conrelid == fkrelid)
@@ -13969,8 +13984,8 @@ validateForeignKeyConstraint(char *conname,
 	 */
 	snapshot = RegisterSnapshot(GetLatestSnapshot());
 	slot = table_slot_create(rel, NULL);
-	scan = table_beginscan(rel, snapshot, 0, NULL);
-
+	scan = table_beginscan(rel, snapshot, 0, NULL,
+						   SO_NONE);
 	perTupCxt = AllocSetContextCreate(CurrentMemoryContext,
 									  "validateForeignKeyConstraint",
 									  ALLOCSET_SMALL_SIZES);
@@ -16329,6 +16344,7 @@ ATExecChangeOwner(Oid relationOid, Oid newOwnerId, bool recursing, LOCKMODE lock
 		case RELKIND_MATVIEW:
 		case RELKIND_FOREIGN_TABLE:
 		case RELKIND_PARTITIONED_TABLE:
+		case RELKIND_PROPGRAPH:
 			/* ok to change owner */
 			break;
 		case RELKIND_INDEX:
@@ -17460,14 +17476,12 @@ ATExecEnableDisableRule(Relation rel, const char *rulename,
 }
 
 /*
- * ALTER TABLE INHERIT
+ * Preparation phase of [NO] INHERIT
  *
- * Add a parent to the child's parents. This verifies that all the columns and
- * check constraints of the parent appear in the child and that they have the
- * same data types and expressions.
+ * Check the relation defined as a child.
  */
 static void
-ATPrepAddInherit(Relation child_rel)
+ATPrepChangeInherit(Relation child_rel)
 {
 	if (child_rel->rd_rel->reloftype)
 		ereport(ERROR,
@@ -17478,14 +17492,11 @@ ATPrepAddInherit(Relation child_rel)
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("cannot change inheritance of a partition")));
-
-	if (child_rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("cannot change inheritance of partitioned table")));
 }
 
 /*
+ * ALTER TABLE INHERIT
+ *
  * Return the address of the new parent relation.
  */
 static ObjectAddress
@@ -17596,6 +17607,9 @@ ATExecAddInherit(Relation child_rel, RangeVar *parent, LOCKMODE lockmode)
  * CreateInheritance
  *		Catalog manipulation portion of creating inheritance between a child
  *		table and a parent table.
+ *
+ * This verifies that all the columns and check constraints of the parent
+ * appear in the child and that they have the same data types and expressions.
  *
  * Common to ATExecAddInherit() and ATExecAttachPartition().
  */
@@ -18055,11 +18069,6 @@ ATExecDropInherit(Relation rel, RangeVar *parent, LOCKMODE lockmode)
 {
 	ObjectAddress address;
 	Relation	parent_rel;
-
-	if (rel->rd_rel->relispartition)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("cannot change inheritance of a partition")));
 
 	/*
 	 * AccessShareLock on the parent is probably enough, seeing that DROP
@@ -19897,6 +19906,11 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("\"%s\" is not a composite type", rv->relname)));
 
+	if (reltype == OBJECT_PROPGRAPH && relkind != RELKIND_PROPGRAPH)
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("\"%s\" is not a property graph", rv->relname)));
+
 	if (reltype == OBJECT_INDEX && relkind != RELKIND_INDEX &&
 		relkind != RELKIND_PARTITIONED_INDEX
 		&& !IsA(stmt, RenameStmt))
@@ -20604,7 +20618,8 @@ ATExecAttachPartition(List **wqueue, Relation rel, PartitionCmd *cmd,
 							  list_length(exceptpuboids),
 							  RelationGetRelationName(attachrel),
 							  pubnames.data),
-				errdetail("The publication EXCEPT clause cannot contain tables that are partitions."));
+				errdetail("The publication EXCEPT clause cannot contain tables that are partitions."),
+				errhint("Change the publication's EXCEPT clause using ALTER PUBLICATION ... SET ALL TABLES."));
 	}
 
 	list_free(exceptpuboids);
@@ -22821,7 +22836,7 @@ MergePartitionsMoveRows(List **wqueue, List *mergingPartitions, Relation newPart
 	ListCell   *ltab;
 
 	/* The FSM is empty, so don't bother using it. */
-	int			ti_options = TABLE_INSERT_SKIP_FSM;
+	uint32		ti_options = TABLE_INSERT_SKIP_FSM;
 	BulkInsertState bistate;	/* state of bulk inserts for partition */
 	TupleTableSlot *dstslot;
 
@@ -22871,7 +22886,8 @@ MergePartitionsMoveRows(List **wqueue, List *mergingPartitions, Relation newPart
 
 		/* Scan through the rows. */
 		snapshot = RegisterSnapshot(GetLatestSnapshot());
-		scan = table_beginscan(mergingPartition, snapshot, 0, NULL);
+		scan = table_beginscan(mergingPartition, snapshot, 0, NULL,
+							   SO_NONE);
 
 		/*
 		 * Switch to per-tuple memory context and reset it for each tuple
@@ -23211,7 +23227,7 @@ createSplitPartitionContext(Relation partRel)
  * deleteSplitPartitionContext: delete context for partition
  */
 static void
-deleteSplitPartitionContext(SplitPartitionContext *pc, List **wqueue, int ti_options)
+deleteSplitPartitionContext(SplitPartitionContext *pc, List **wqueue, uint32 ti_options)
 {
 	ListCell   *ltab;
 
@@ -23253,7 +23269,7 @@ SplitPartitionMoveRows(List **wqueue, Relation rel, Relation splitRel,
 					   List *partlist, List *newPartRels)
 {
 	/* The FSM is empty, so don't bother using it. */
-	int			ti_options = TABLE_INSERT_SKIP_FSM;
+	uint32		ti_options = TABLE_INSERT_SKIP_FSM;
 	CommandId	mycid;
 	EState	   *estate;
 	ListCell   *listptr,
@@ -23335,7 +23351,8 @@ SplitPartitionMoveRows(List **wqueue, Relation rel, Relation splitRel,
 
 	/* Scan through the rows. */
 	snapshot = RegisterSnapshot(GetLatestSnapshot());
-	scan = table_beginscan(splitRel, snapshot, 0, NULL);
+	scan = table_beginscan(splitRel, snapshot, 0, NULL,
+						   SO_NONE);
 
 	/*
 	 * Switch to per-tuple memory context and reset it for each tuple

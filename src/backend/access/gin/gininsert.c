@@ -23,10 +23,12 @@
 #include "catalog/index.h"
 #include "catalog/pg_collation.h"
 #include "commands/progress.h"
+#include "executor/instrument.h"
 #include "miscadmin.h"
 #include "nodes/execnodes.h"
 #include "pgstat.h"
 #include "storage/bufmgr.h"
+#include "storage/condition_variable.h"
 #include "storage/proc.h"
 #include "storage/predicate.h"
 #include "tcop/tcopprot.h"
@@ -34,6 +36,7 @@
 #include "utils/memutils.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
+#include "utils/tuplesort.h"
 #include "utils/typcache.h"
 #include "utils/wait_event.h"
 
@@ -2065,7 +2068,8 @@ _gin_parallel_scan_and_build(GinBuildState *state,
 	indexInfo->ii_Concurrent = ginshared->isconcurrent;
 
 	scan = table_beginscan_parallel(heap,
-									ParallelTableScanFromGinBuildShared(ginshared));
+									ParallelTableScanFromGinBuildShared(ginshared),
+									SO_NONE);
 
 	reltuples = table_index_build_scan(heap, index, indexInfo, true, progress,
 									   ginBuildCallbackParallel, state, scan);

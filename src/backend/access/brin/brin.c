@@ -28,10 +28,12 @@
 #include "catalog/index.h"
 #include "catalog/pg_am.h"
 #include "commands/vacuum.h"
+#include "executor/instrument.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
 #include "storage/bufmgr.h"
+#include "storage/condition_variable.h"
 #include "storage/freespace.h"
 #include "storage/proc.h"
 #include "tcop/tcopprot.h"
@@ -2842,7 +2844,8 @@ _brin_parallel_scan_and_build(BrinBuildState *state,
 	indexInfo->ii_Concurrent = brinshared->isconcurrent;
 
 	scan = table_beginscan_parallel(heap,
-									ParallelTableScanFromBrinShared(brinshared));
+									ParallelTableScanFromBrinShared(brinshared),
+									SO_NONE);
 
 	reltuples = table_index_build_scan(heap, index, indexInfo, true, true,
 									   brinbuildCallbackParallel, state, scan);

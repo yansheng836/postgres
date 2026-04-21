@@ -1851,10 +1851,10 @@ expand_table_name_patterns(Archive *fout,
 						  "\n     LEFT JOIN pg_catalog.pg_namespace n"
 						  "\n     ON n.oid OPERATOR(pg_catalog.=) c.relnamespace"
 						  "\nWHERE c.relkind OPERATOR(pg_catalog.=) ANY"
-						  "\n    (array['%c', '%c', '%c', '%c', '%c', '%c'])\n",
+						  "\n    (array['%c', '%c', '%c', '%c', '%c', '%c', '%c'])\n",
 						  RELKIND_RELATION, RELKIND_SEQUENCE, RELKIND_VIEW,
 						  RELKIND_MATVIEW, RELKIND_FOREIGN_TABLE,
-						  RELKIND_PARTITIONED_TABLE);
+						  RELKIND_PARTITIONED_TABLE, RELKIND_PROPGRAPH);
 		initPQExpBuffer(&dbbuf);
 		processSQLNamePattern(GetConnection(fout), query, cell->val, true,
 							  false, "n.nspname", "c.relname", NULL,
@@ -3034,6 +3034,9 @@ makeTableDataInfo(DumpOptions *dopt, TableInfo *tbinfo)
 	if (tbinfo->dataObj != NULL)
 		return;
 
+	/* Skip property graphs (no data to dump) */
+	if (tbinfo->relkind == RELKIND_PROPGRAPH)
+		return;
 	/* Skip VIEWs (no data to dump) */
 	if (tbinfo->relkind == RELKIND_VIEW)
 		return;
@@ -4622,14 +4625,14 @@ getPublications(Archive *fout)
 		 * Get the list of tables for publications specified in the EXCEPT
 		 * TABLE clause.
 		 *
-		 * Although individual EXCEPT TABLE entries could be stored in
+		 * Although individual table entries in EXCEPT list could be stored in
 		 * PublicationRelInfo, dumpPublicationTable cannot be used to emit
 		 * them, because there is no ALTER PUBLICATION ... ADD command to add
-		 * individual table entries to the EXCEPT TABLE list.
+		 * individual table entries to the EXCEPT list.
 		 *
-		 * Therefore, the approach is to dump the complete EXCEPT TABLE list
-		 * in a single CREATE PUBLICATION statement. PublicationInfo is used
-		 * to collect this information, which is then emitted by
+		 * Therefore, the approach is to dump the complete EXCEPT list in a
+		 * single CREATE PUBLICATION statement. PublicationInfo is used to
+		 * collect this information, which is then emitted by
 		 * dumpPublication().
 		 */
 		if (fout->remoteVersion >= 190000)
@@ -4705,19 +4708,19 @@ dumpPublication(Archive *fout, const PublicationInfo *pubinfo)
 
 		appendPQExpBufferStr(query, " FOR ALL TABLES");
 
-		/* Include EXCEPT TABLE clause if there are except_tables. */
+		/* Include EXCEPT (TABLE) clause if there are except_tables. */
 		for (SimplePtrListCell *cell = pubinfo->except_tables.head; cell; cell = cell->next)
 		{
 			TableInfo  *tbinfo = (TableInfo *) cell->ptr;
 
 			if (++n_except == 1)
-				appendPQExpBufferStr(query, " EXCEPT TABLE (");
+				appendPQExpBufferStr(query, " EXCEPT (");
 			else
 				appendPQExpBufferStr(query, ", ");
-			appendPQExpBuffer(query, "ONLY %s", fmtQualifiedDumpable(tbinfo));
+			appendPQExpBuffer(query, "TABLE ONLY %s", fmtQualifiedDumpable(tbinfo));
 		}
 		if (n_except > 0)
-			appendPQExpBufferStr(query, ")");
+			appendPQExpBufferChar(query, ')');
 
 		if (pubinfo->puballsequences)
 			appendPQExpBufferStr(query, ", ALL SEQUENCES");
@@ -5269,8 +5272,7 @@ getSubscriptions(Archive *fout)
 		appendPQExpBufferStr(query,
 							 " s.submaxretention,\n");
 	else
-		appendPQExpBuffer(query,
-						  " 0 AS submaxretention,\n");
+		appendPQExpBufferStr(query, " 0 AS submaxretention,\n");
 
 	if (fout->remoteVersion >= 190000)
 		appendPQExpBufferStr(query,
@@ -5589,7 +5591,7 @@ dumpSubscription(Archive *fout, const SubscriptionInfo *subinfo)
 	}
 	else
 	{
-		appendPQExpBuffer(query, "CONNECTION ");
+		appendPQExpBufferStr(query, "CONNECTION ");
 		appendStringLiteralAH(query, subinfo->subconninfo, fout);
 	}
 
@@ -7224,6 +7226,7 @@ getRelationStatistics(Archive *fout, DumpableObject *rel, int32 relpages,
 		dobj->components |= DUMP_COMPONENT_STATISTICS;
 		dobj->name = pg_strdup(rel->name);
 		dobj->namespace = rel->namespace;
+		info->relid = rel->catId.oid;
 		info->relpages = relpages;
 		info->reltuples = pstrdup(reltuples);
 		info->relallvisible = relallvisible;
@@ -7484,7 +7487,8 @@ getTables(Archive *fout, int *numTables)
 						 CppAsString2(RELKIND_COMPOSITE_TYPE) ", "
 						 CppAsString2(RELKIND_MATVIEW) ", "
 						 CppAsString2(RELKIND_FOREIGN_TABLE) ", "
-						 CppAsString2(RELKIND_PARTITIONED_TABLE) ")\n"
+						 CppAsString2(RELKIND_PARTITIONED_TABLE) ", "
+						 CppAsString2(RELKIND_PROPGRAPH) ")\n"
 						 "ORDER BY c.oid");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
@@ -10525,6 +10529,7 @@ getForeignDataWrappers(Archive *fout)
 	int			i_fdwowner;
 	int			i_fdwhandler;
 	int			i_fdwvalidator;
+	int			i_fdwconnection;
 	int			i_fdwacl;
 	int			i_acldefault;
 	int			i_fdwoptions;
@@ -10534,7 +10539,14 @@ getForeignDataWrappers(Archive *fout)
 	appendPQExpBufferStr(query, "SELECT tableoid, oid, fdwname, "
 						 "fdwowner, "
 						 "fdwhandler::pg_catalog.regproc, "
-						 "fdwvalidator::pg_catalog.regproc, "
+						 "fdwvalidator::pg_catalog.regproc, ");
+
+	if (fout->remoteVersion >= 190000)
+		appendPQExpBufferStr(query, "fdwconnection::pg_catalog.regproc, ");
+	else
+		appendPQExpBufferStr(query, "'-' AS fdwconnection, ");
+
+	appendPQExpBufferStr(query,
 						 "fdwacl, "
 						 "acldefault('F', fdwowner) AS acldefault, "
 						 "array_to_string(ARRAY("
@@ -10557,6 +10569,7 @@ getForeignDataWrappers(Archive *fout)
 	i_fdwowner = PQfnumber(res, "fdwowner");
 	i_fdwhandler = PQfnumber(res, "fdwhandler");
 	i_fdwvalidator = PQfnumber(res, "fdwvalidator");
+	i_fdwconnection = PQfnumber(res, "fdwconnection");
 	i_fdwacl = PQfnumber(res, "fdwacl");
 	i_acldefault = PQfnumber(res, "acldefault");
 	i_fdwoptions = PQfnumber(res, "fdwoptions");
@@ -10576,6 +10589,7 @@ getForeignDataWrappers(Archive *fout)
 		fdwinfo[i].rolname = getRoleName(PQgetvalue(res, i, i_fdwowner));
 		fdwinfo[i].fdwhandler = pg_strdup(PQgetvalue(res, i, i_fdwhandler));
 		fdwinfo[i].fdwvalidator = pg_strdup(PQgetvalue(res, i, i_fdwvalidator));
+		fdwinfo[i].fdwconnection = pg_strdup(PQgetvalue(res, i, i_fdwconnection));
 		fdwinfo[i].fdwoptions = pg_strdup(PQgetvalue(res, i, i_fdwoptions));
 
 		/* Decide whether we want to dump it */
@@ -11118,6 +11132,7 @@ static PGresult *
 fetchAttributeStats(Archive *fout)
 {
 	ArchiveHandle *AH = (ArchiveHandle *) fout;
+	PQExpBuffer relids = createPQExpBuffer();
 	PQExpBuffer nspnames = createPQExpBuffer();
 	PQExpBuffer relnames = createPQExpBuffer();
 	int			count = 0;
@@ -11153,6 +11168,7 @@ fetchAttributeStats(Archive *fout)
 		restarted = true;
 	}
 
+	appendPQExpBufferChar(relids, '{');
 	appendPQExpBufferChar(nspnames, '{');
 	appendPQExpBufferChar(relnames, '{');
 
@@ -11164,15 +11180,28 @@ fetchAttributeStats(Archive *fout)
 	 */
 	for (; te != AH->toc && count < max_rels; te = te->next)
 	{
-		if ((te->reqs & REQ_STATS) != 0 &&
-			strcmp(te->desc, "STATISTICS DATA") == 0)
+		if ((te->reqs & REQ_STATS) == 0 ||
+			strcmp(te->desc, "STATISTICS DATA") != 0)
+			continue;
+
+		if (fout->remoteVersion >= 190000)
+		{
+			const RelStatsInfo *rsinfo = (const RelStatsInfo *) te->defnDumperArg;
+			char		relid[32];
+
+			sprintf(relid, "%u", rsinfo->relid);
+			appendPGArray(relids, relid);
+		}
+		else
 		{
 			appendPGArray(nspnames, te->namespace);
 			appendPGArray(relnames, te->tag);
-			count++;
 		}
+
+		count++;
 	}
 
+	appendPQExpBufferChar(relids, '}');
 	appendPQExpBufferChar(nspnames, '}');
 	appendPQExpBufferChar(relnames, '}');
 
@@ -11182,14 +11211,25 @@ fetchAttributeStats(Archive *fout)
 		PQExpBuffer query = createPQExpBuffer();
 
 		appendPQExpBufferStr(query, "EXECUTE getAttributeStats(");
-		appendStringLiteralAH(query, nspnames->data, fout);
-		appendPQExpBufferStr(query, "::pg_catalog.name[],");
-		appendStringLiteralAH(query, relnames->data, fout);
-		appendPQExpBufferStr(query, "::pg_catalog.name[])");
+
+		if (fout->remoteVersion >= 190000)
+		{
+			appendStringLiteralAH(query, relids->data, fout);
+			appendPQExpBufferStr(query, "::pg_catalog.oid[])");
+		}
+		else
+		{
+			appendStringLiteralAH(query, nspnames->data, fout);
+			appendPQExpBufferStr(query, "::pg_catalog.name[],");
+			appendStringLiteralAH(query, relnames->data, fout);
+			appendPQExpBufferStr(query, "::pg_catalog.name[])");
+		}
+
 		res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 		destroyPQExpBuffer(query);
 	}
 
+	destroyPQExpBuffer(relids);
 	destroyPQExpBuffer(nspnames);
 	destroyPQExpBuffer(relnames);
 	return res;
@@ -11250,8 +11290,14 @@ dumpRelationStats_dumper(Archive *fout, const void *userArg, const TocEntry *te)
 	query = createPQExpBuffer();
 	if (!fout->is_prepared[PREPQUERY_GETATTRIBUTESTATS])
 	{
+		if (fout->remoteVersion >= 190000)
+			appendPQExpBufferStr(query,
+								 "PREPARE getAttributeStats(pg_catalog.oid[]) AS\n");
+		else
+			appendPQExpBufferStr(query,
+								 "PREPARE getAttributeStats(pg_catalog.name[], pg_catalog.name[]) AS\n");
+
 		appendPQExpBufferStr(query,
-							 "PREPARE getAttributeStats(pg_catalog.name[], pg_catalog.name[]) AS\n"
 							 "SELECT s.schemaname, s.tablename, s.attname, s.inherited, "
 							 "s.null_frac, s.avg_width, s.n_distinct, "
 							 "s.most_common_vals, s.most_common_freqs, "
@@ -11273,17 +11319,25 @@ dumpRelationStats_dumper(Archive *fout, const void *userArg, const TocEntry *te)
 		/*
 		 * The results must be in the order of the relations supplied in the
 		 * parameters to ensure we remain in sync as we walk through the TOC.
-		 * The redundant filter clause on s.tablename = ANY(...) seems
-		 * sufficient to convince the planner to use
+		 *
+		 * For v9.4 through v18, the redundant filter clause on s.tablename =
+		 * ANY(...) seems sufficient to convince the planner to use
 		 * pg_class_relname_nsp_index, which avoids a full scan of pg_stats.
-		 * This may not work for all versions.
+		 * In newer versions, pg_stats returns the table OIDs, eliminating the
+		 * need for that hack.
 		 *
 		 * Our query for retrieving statistics for multiple relations uses
 		 * WITH ORDINALITY and multi-argument UNNEST(), both of which were
 		 * introduced in v9.4.  For older versions, we resort to gathering
 		 * statistics for a single relation at a time.
 		 */
-		if (fout->remoteVersion >= 90400)
+		if (fout->remoteVersion >= 190000)
+			appendPQExpBufferStr(query,
+								 "FROM pg_catalog.pg_stats s "
+								 "JOIN unnest($1) WITH ORDINALITY AS u (tableid, ord) "
+								 "ON s.tableid = u.tableid "
+								 "ORDER BY u.ord, s.attname, s.inherited");
+		else if (fout->remoteVersion >= 90400)
 			appendPQExpBufferStr(query,
 								 "FROM pg_catalog.pg_stats s "
 								 "JOIN unnest($1, $2) WITH ORDINALITY AS u (schemaname, tablename, ord) "
@@ -16179,6 +16233,9 @@ dumpForeignDataWrapper(Archive *fout, const FdwInfo *fdwinfo)
 	if (strcmp(fdwinfo->fdwvalidator, "-") != 0)
 		appendPQExpBuffer(q, " VALIDATOR %s", fdwinfo->fdwvalidator);
 
+	if (strcmp(fdwinfo->fdwconnection, "-") != 0)
+		appendPQExpBuffer(q, " CONNECTION %s", fdwinfo->fdwconnection);
+
 	if (strlen(fdwinfo->fdwoptions) > 0)
 		appendPQExpBuffer(q, " OPTIONS (\n    %s\n)", fdwinfo->fdwoptions);
 
@@ -16987,8 +17044,20 @@ dumpTable(Archive *fout, const TableInfo *tbinfo)
 	namecopy = pg_strdup(fmtId(tbinfo->dobj.name));
 	if (tbinfo->dobj.dump & DUMP_COMPONENT_ACL)
 	{
-		const char *objtype =
-			(tbinfo->relkind == RELKIND_SEQUENCE) ? "SEQUENCE" : "TABLE";
+		const char *objtype;
+
+		switch (tbinfo->relkind)
+		{
+			case RELKIND_SEQUENCE:
+				objtype = "SEQUENCE";
+				break;
+			case RELKIND_PROPGRAPH:
+				objtype = "PROPERTY GRAPH";
+				break;
+			default:
+				objtype = "TABLE";
+				break;
+		}
 
 		tableAclDumpId =
 			dumpACL(fout, tbinfo->dobj.dumpId, InvalidDumpId,
@@ -17234,8 +17303,6 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 
 		reltypename = "VIEW";
 
-		appendPQExpBuffer(delq, "DROP VIEW %s;\n", qualrelname);
-
 		if (dopt->binary_upgrade)
 			binary_upgrade_set_pg_class_oids(fout, q,
 											 tbinfo->dobj.catId.oid);
@@ -17259,6 +17326,47 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 
 		if (tbinfo->checkoption != NULL && !tbinfo->dummy_view)
 			appendPQExpBuffer(q, "\n  WITH %s CHECK OPTION", tbinfo->checkoption);
+		appendPQExpBufferStr(q, ";\n");
+	}
+	else if (tbinfo->relkind == RELKIND_PROPGRAPH)
+	{
+		PQExpBuffer query = createPQExpBuffer();
+		PGresult   *res;
+		int			len;
+
+		reltypename = "PROPERTY GRAPH";
+
+		if (dopt->binary_upgrade)
+			binary_upgrade_set_pg_class_oids(fout, q,
+											 tbinfo->dobj.catId.oid);
+
+		appendPQExpBuffer(query,
+						  "SELECT pg_catalog.pg_get_propgraphdef('%u'::pg_catalog.oid) AS pgdef",
+						  tbinfo->dobj.catId.oid);
+
+		res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
+
+		if (PQntuples(res) != 1)
+		{
+			if (PQntuples(res) < 1)
+				pg_fatal("query to obtain definition of property graph \"%s\" returned no data",
+						 tbinfo->dobj.name);
+			else
+				pg_fatal("query to obtain definition of property graph \"%s\" returned more than one definition",
+						 tbinfo->dobj.name);
+		}
+
+		len = PQgetlength(res, 0, 0);
+
+		if (len == 0)
+			pg_fatal("definition of property graph \"%s\" appears to be empty (length zero)",
+					 tbinfo->dobj.name);
+
+		appendPQExpBufferStr(q, PQgetvalue(res, 0, 0));
+
+		PQclear(res);
+		destroyPQExpBuffer(query);
+
 		appendPQExpBufferStr(q, ";\n");
 	}
 	else
@@ -17335,8 +17443,6 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 
 		numParents = tbinfo->numParents;
 		parents = tbinfo->parents;
-
-		appendPQExpBuffer(delq, "DROP %s %s;\n", reltypename, qualrelname);
 
 		if (dopt->binary_upgrade)
 			binary_upgrade_set_pg_class_oids(fout, q,
@@ -18080,6 +18186,8 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 	if (tbinfo->forcerowsec)
 		appendPQExpBuffer(q, "\nALTER TABLE ONLY %s FORCE ROW LEVEL SECURITY;\n",
 						  qualrelname);
+
+	appendPQExpBuffer(delq, "DROP %s %s;\n", reltypename, qualrelname);
 
 	if (dopt->binary_upgrade)
 		binary_upgrade_extension_member(q, &tbinfo->dobj,
@@ -20413,6 +20521,17 @@ getDependencies(Archive *fout)
 						 "WHERE deptype NOT IN ('p', 'e', 'i') AND "
 						 "classid = 'pg_amproc'::regclass AND objid = p.oid "
 						 "AND NOT (refclassid = 'pg_opfamily'::regclass AND amprocfamily = refobjid)\n");
+
+	/*
+	 * Translate dependencies of pg_propgraph_element entries into
+	 * dependencies of their parent pg_class entry.
+	 */
+	if (fout->remoteVersion >= 190000)
+		appendPQExpBufferStr(query, "UNION ALL\n"
+							 "SELECT 'pg_class'::regclass AS classid, pgepgid AS objid, refclassid, refobjid, deptype "
+							 "FROM pg_depend d, pg_propgraph_element pge "
+							 "WHERE deptype NOT IN ('p', 'e', 'i') AND "
+							 "classid = 'pg_propgraph_element'::regclass AND objid = pge.oid\n");
 
 	/* Sort the output for efficiency below */
 	appendPQExpBufferStr(query, "ORDER BY 1,2");

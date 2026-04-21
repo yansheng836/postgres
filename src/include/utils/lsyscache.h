@@ -99,7 +99,6 @@ extern Oid	get_atttype(Oid relid, AttrNumber attnum);
 extern void get_atttypetypmodcoll(Oid relid, AttrNumber attnum,
 								  Oid *typid, int32 *typmod, Oid *collid);
 extern Datum get_attoptions(Oid relid, int16 attnum);
-extern bool get_attnotnull(Oid relid, AttrNumber attnum);
 extern Oid	get_cast_oid(Oid sourcetypeid, Oid targettypeid, bool missing_ok);
 extern char *get_collation_name(Oid colloid);
 extern bool get_collation_isdeterministic(Oid colloid);
@@ -202,6 +201,7 @@ extern char *get_namespace_name(Oid nspid);
 extern char *get_namespace_name_or_temp(Oid nspid);
 extern Oid	get_range_subtype(Oid rangeOid);
 extern Oid	get_range_collation(Oid rangeOid);
+extern Oid	get_range_constructor2(Oid rangeOid);
 extern Oid	get_range_multirange(Oid rangeOid);
 extern Oid	get_multirange_range(Oid multirangeOid);
 extern Oid	get_index_column_opclass(Oid index_oid, int attno);
@@ -212,6 +212,9 @@ extern Oid	get_publication_oid(const char *pubname, bool missing_ok);
 extern char *get_publication_name(Oid pubid, bool missing_ok);
 extern Oid	get_subscription_oid(const char *subname, bool missing_ok);
 extern char *get_subscription_name(Oid subid, bool missing_ok);
+
+extern char *get_propgraph_label_name(Oid labeloid);
+extern char *get_propgraph_property_name(Oid propoid);
 
 #define type_is_array(typid)  (get_element_type(typid) != InvalidOid)
 /* type_is_array_domain accepts both plain arrays and domains over arrays */

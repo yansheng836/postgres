@@ -587,7 +587,7 @@ make_icu_collator(const char *iculocstr, const char *icurules)
 
 		status = U_ZERO_ERROR;
 		collator_all_rules = ucol_openRules(all_rules, u_strlen(all_rules),
-											UCOL_DEFAULT, UCOL_DEFAULT_STRENGTH,
+											UCOL_DEFAULT, UCOL_DEFAULT,
 											NULL, &status);
 		if (U_FAILURE(status))
 		{
@@ -989,11 +989,11 @@ static int32_t
 foldcase_options(const char *locale)
 {
 	uint32		options = U_FOLD_CASE_DEFAULT;
-	char		lang[3];
+	char		lang[ULOC_LANG_CAPACITY];
 	UErrorCode	status = U_ZERO_ERROR;
 
-	uloc_getLanguage(locale, lang, 3, &status);
-	if (U_SUCCESS(status))
+	uloc_getLanguage(locale, lang, ULOC_LANG_CAPACITY, &status);
+	if (U_SUCCESS(status) && status != U_STRING_NOT_TERMINATED_WARNING)
 	{
 		/*
 		 * The option name is confusing, but it causes u_strFoldCase to use

@@ -455,6 +455,10 @@ main(int argc, char *argv[])
 						schema_only, "-s/--schema-only",
 						tablespaces_only, "-t/--tablespaces-only");
 
+	/* --clean and --data-only are incompatible */
+	check_mut_excl_opts(output_clean, "-c/--clean",
+						data_only, "-a/--data-only");
+
 	if (if_exists && !output_clean)
 		pg_fatal("option %s requires option %s",
 				 "--if-exists", "-c/--clean");
@@ -724,7 +728,7 @@ main(int argc, char *argv[])
 		resetPQExpBuffer(qry);
 
 		/* Put the correct escape string behavior into the archive. */
-		appendPQExpBuffer(qry, "SET standard_conforming_strings = 'on';\n");
+		appendPQExpBufferStr(qry, "SET standard_conforming_strings = 'on';\n");
 		ArchiveEntry(fout,
 					 nilCatalogId,	/* catalog ID */
 					 createDumpId(),	/* dump ID */
@@ -1501,7 +1505,7 @@ dumpRoleMembership(PGconn *conn)
 					appendPQExpBuffer(querybuf, " WITH %s", optbuf->data);
 				if (dump_this_grantor)
 					appendPQExpBuffer(querybuf, " GRANTED BY %s", fmtId(grantor));
-				appendPQExpBuffer(querybuf, ";\n");
+				appendPQExpBufferStr(querybuf, ";\n");
 
 				if (archDumpFormat == archNull)
 					fprintf(OPF, "%s", querybuf->data);

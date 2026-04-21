@@ -73,7 +73,7 @@
 static TupleDesc ExecTypeFromTLInternal(List *targetList,
 										bool skipjunk);
 static pg_attribute_always_inline void slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
-															  int reqnatts);
+															  int reqnatts, bool support_cstring);
 static inline void tts_buffer_heap_store_tuple(TupleTableSlot *slot,
 											   HeapTuple tuple,
 											   Buffer buffer,
@@ -349,7 +349,7 @@ tts_heap_getsomeattrs(TupleTableSlot *slot, int natts)
 
 	Assert(!TTS_EMPTY(slot));
 
-	slot_deform_heap_tuple(slot, hslot->tuple, &hslot->off, natts);
+	slot_deform_heap_tuple(slot, hslot->tuple, &hslot->off, natts, false);
 }
 
 static Datum
@@ -547,7 +547,7 @@ tts_minimal_getsomeattrs(TupleTableSlot *slot, int natts)
 
 	Assert(!TTS_EMPTY(slot));
 
-	slot_deform_heap_tuple(slot, mslot->tuple, &mslot->off, natts);
+	slot_deform_heap_tuple(slot, mslot->tuple, &mslot->off, natts, true);
 }
 
 /*
@@ -754,7 +754,7 @@ tts_buffer_heap_getsomeattrs(TupleTableSlot *slot, int natts)
 
 	Assert(!TTS_EMPTY(slot));
 
-	slot_deform_heap_tuple(slot, bslot->base.tuple, &bslot->base.off, natts);
+	slot_deform_heap_tuple(slot, bslot->base.tuple, &bslot->base.off, natts, false);
 }
 
 static Datum
@@ -1008,11 +1008,16 @@ tts_buffer_heap_store_tuple(TupleTableSlot *slot, HeapTuple tuple,
  *
  * This is marked as always inline, so the different offp for different types
  * of slots gets optimized away.
+ *
+ * support_cstring should be passed as a const to allow the compiler only
+ * emit code during inlining for cstring deforming when it's required.
+ * cstrings can exist in MinimalTuples, but not in HeapTuples.
  */
 static pg_attribute_always_inline void
 slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
-					   int reqnatts)
+					   int reqnatts, bool support_cstring)
 {
+	CompactAttribute *cattrs;
 	CompactAttribute *cattr;
 	TupleDesc	tupleDesc = slot->tts_tupleDescriptor;
 	HeapTupleHeader tup = tuple->t_data;
@@ -1054,7 +1059,7 @@ slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
 		natts = Min(natts, reqnatts);
 		if (natts > firstNonGuaranteedAttr)
 		{
-			bits8	   *bp = tup->t_bits;
+			uint8	   *bp = tup->t_bits;
 
 			/* Find the first NULL attr */
 			firstNullAttr = first_null_attr(bp, natts);
@@ -1095,6 +1100,13 @@ slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
 	values = slot->tts_values;
 	slot->tts_nvalid = reqnatts;
 
+	/*
+	 * We store the tupleDesc's CompactAttribute array in 'cattrs' as gcc
+	 * seems to be unwilling to optimize accessing the CompactAttribute
+	 * element efficiently when accessing it via TupleDescCompactAttr().
+	 */
+	cattrs = tupleDesc->compact_attrs;
+
 	/* Ensure we calculated tp correctly */
 	Assert(tp == (char *) tup + tup->t_hoff);
 
@@ -1105,7 +1117,7 @@ slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
 		do
 		{
 			isnull[attnum] = false;
-			cattr = TupleDescCompactAttr(tupleDesc, attnum);
+			cattr = &cattrs[attnum];
 			attlen = cattr->attlen;
 
 			/* We don't expect any non-byval types */
@@ -1150,9 +1162,8 @@ slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
 		do
 		{
 			isnull[attnum] = false;
-			cattr = TupleDescCompactAttr(tupleDesc, attnum);
+			cattr = &cattrs[attnum];
 			attlen = cattr->attlen;
-
 			off = cattr->attcacheoff;
 			values[attnum] = fetch_att_noerr(tp + off,
 											 cattr->attbyval,
@@ -1179,15 +1190,16 @@ slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
 		int			attlen;
 
 		isnull[attnum] = false;
-		cattr = TupleDescCompactAttr(tupleDesc, attnum);
+		cattr = &cattrs[attnum];
 		attlen = cattr->attlen;
 
 		/*
-		 * cstrings don't exist in heap tuples.  Use pg_assume to instruct the
-		 * compiler not to emit the cstring-related code in
-		 * align_fetch_then_add().
+		 * Only emit the cstring-related code in align_fetch_then_add() when
+		 * cstring support is needed.  We assume support_cstring will be
+		 * passed as a const to allow the compiler to eliminate this branch.
 		 */
-		pg_assume(attlen > 0 || attlen == -1);
+		if (!support_cstring)
+			pg_assume(attlen > 0 || attlen == -1);
 
 		/* align 'off', fetch the datum, and increment off beyond the datum */
 		values[attnum] = align_fetch_then_add(tp,
@@ -1212,11 +1224,12 @@ slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
 			continue;
 		}
 
-		cattr = TupleDescCompactAttr(tupleDesc, attnum);
+		cattr = &cattrs[attnum];
 		attlen = cattr->attlen;
 
-		/* As above, we don't expect cstrings */
-		pg_assume(attlen > 0 || attlen == -1);
+		/* As above, only emit cstring code when needed. */
+		if (!support_cstring)
+			pg_assume(attlen > 0 || attlen == -1);
 
 		/* align 'off', fetch the datum, and increment off beyond the datum */
 		values[attnum] = align_fetch_then_add(tp,

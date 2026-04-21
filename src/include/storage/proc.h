@@ -14,7 +14,6 @@
 #ifndef _PROC_H_
 #define _PROC_H_
 
-#include "access/clog.h"
 #include "access/xlogdefs.h"
 #include "lib/ilist.h"
 #include "miscadmin.h"
@@ -23,6 +22,10 @@
 #include "storage/pg_sema.h"
 #include "storage/proclist_types.h"
 #include "storage/procnumber.h"
+#include "storage/spin.h"
+
+/* Avoid including clog.h here */
+typedef int XidStatus;
 
 /*
  * Each backend advertises up to PGPROC_MAX_CACHED_SUBXIDS TransactionIds
@@ -180,6 +183,11 @@ typedef enum
  */
 typedef struct PGPROC
 {
+	/*
+	 * Align the struct at cache line boundaries.  This is just for
+	 * performance, to avoid false sharing.
+	 */
+	alignas(PG_CACHE_LINE_SIZE)
 	dlist_head *procgloballist; /* procglobal list that owns this PGPROC */
 	dlist_node	freeProcsLink;	/* link in procgloballist, when in recycled
 								 * state */
@@ -375,14 +383,6 @@ typedef struct PGPROC
 
 	uint32		wait_event_info;	/* proc's wait information */
 }
-
-/*
- * If compiler understands aligned pragma, use it to align the struct at cache
- * line boundaries.  This is just for performance, to avoid false sharing.
- */
-#if defined(pg_attribute_aligned)
-			pg_attribute_aligned(PG_CACHE_LINE_SIZE)
-#endif
 PGPROC;
 
 extern PGDLLIMPORT PGPROC *MyProc;
@@ -552,8 +552,6 @@ extern PGDLLIMPORT PGPROC *AuxiliaryProcs;
  * Function Prototypes
  */
 extern int	ProcGlobalSemas(void);
-extern Size ProcGlobalShmemSize(void);
-extern void InitProcGlobal(void);
 extern void InitProcess(void);
 extern void InitProcessPhase2(void);
 extern void InitAuxiliaryProcess(void);

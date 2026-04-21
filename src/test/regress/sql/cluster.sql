@@ -248,10 +248,13 @@ REPACK clstrpart;
 CREATE TEMP TABLE new_cluster_info AS SELECT relname, level, relfilenode, relkind FROM pg_partition_tree('clstrpart'::regclass) AS tree JOIN pg_class c ON c.oid=tree.relid ;
 SELECT relname, old.level, old.relkind, old.relfilenode = new.relfilenode FROM old_cluster_info AS old JOIN new_cluster_info AS new USING (relname) ORDER BY relname COLLATE "C";
 
+-- CONCURRENTLY doesn't like partitioned tables
+REPACK (CONCURRENTLY) clstrpart;
+
 DROP TABLE clstrpart;
 
 -- Ownership of partitions is checked
-CREATE TABLE ptnowner(i int unique) PARTITION BY LIST (i);
+CREATE TABLE ptnowner(i int unique not null) PARTITION BY LIST (i);
 CREATE INDEX ptnowner_i_idx ON ptnowner(i);
 CREATE TABLE ptnowner1 PARTITION OF ptnowner FOR VALUES IN (1);
 CREATE ROLE regress_ptnowner;
@@ -259,6 +262,8 @@ CREATE TABLE ptnowner2 PARTITION OF ptnowner FOR VALUES IN (2);
 ALTER TABLE ptnowner1 OWNER TO regress_ptnowner;
 SET SESSION AUTHORIZATION regress_ptnowner;
 CLUSTER ptnowner USING ptnowner_i_idx;
+ALTER TABLE ptnowner1 REPLICA IDENTITY USING INDEX ptnowner1_i_key;
+REPACK (CONCURRENTLY) ptnowner1;
 RESET SESSION AUTHORIZATION;
 ALTER TABLE ptnowner OWNER TO regress_ptnowner;
 CREATE TEMP TABLE ptnowner_oldnodes AS
@@ -266,7 +271,12 @@ CREATE TEMP TABLE ptnowner_oldnodes AS
   JOIN pg_class AS c ON c.oid=tree.relid;
 SET SESSION AUTHORIZATION regress_ptnowner;
 CLUSTER ptnowner USING ptnowner_i_idx;
+-- still can't repack without a replica identity
+ALTER TABLE ptnowner1 REPLICA IDENTITY DEFAULT;
+REPACK (CONCURRENTLY) ptnowner1;
 RESET SESSION AUTHORIZATION;
+SELECT a.relname, a.relfilenode=b.relfilenode FROM pg_class a
+  JOIN ptnowner_oldnodes b USING (oid) ORDER BY a.relname COLLATE "C";
 SELECT a.relname, a.relfilenode=b.relfilenode FROM pg_class a
   JOIN ptnowner_oldnodes b USING (oid) ORDER BY a.relname COLLATE "C";
 DROP TABLE ptnowner;
@@ -382,6 +392,9 @@ SELECT o.relname FROM relnodes_old o
 JOIN relnodes_new n ON o.relname = n.relname
 WHERE o.relfilenode <> n.relfilenode
 ORDER BY o.relname;
+
+-- concurrently
+REPACK (CONCURRENTLY) pg_class;
 
 -- clean up
 DROP TABLE clustertest;
