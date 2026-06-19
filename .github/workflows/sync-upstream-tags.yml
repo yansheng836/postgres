@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: '0 2 * * 1'  # 每周一凌晨2点自动同步（可选）
 
+permissions:
+  contents: write
+  workflows: write
+
 jobs:
   sync-tags:
     runs-on: ubuntu-latest
