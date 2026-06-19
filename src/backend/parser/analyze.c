@@ -80,7 +80,7 @@ static OnConflictExpr *transformOnConflictClause(ParseState *pstate,
 												 OnConflictClause *onConflictClause);
 static ForPortionOfExpr *transformForPortionOfClause(ParseState *pstate,
 													 int rtindex,
-													 const ForPortionOfClause *forPortionOfClause,
+													 const ForPortionOfClause *forPortionOf,
 													 bool isUpdate);
 static int	count_rowexpr_columns(ParseState *pstate, Node *expr);
 static Query *transformSelectStmt(ParseState *pstate, SelectStmt *stmt,
@@ -594,6 +594,14 @@ transformDeleteStmt(ParseState *pstate, DeleteStmt *stmt)
 										 true,
 										 ACL_DELETE);
 	nsitem = pstate->p_target_nsitem;
+
+	/* disallow DELETE ... WHERE CURRENT OF on a view */
+	if (stmt->whereClause &&
+		IsA(stmt->whereClause, CurrentOfExpr) &&
+		pstate->p_target_relation->rd_rel->relkind == RELKIND_VIEW)
+		ereport(ERROR,
+				errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				errmsg("WHERE CURRENT OF on a view is not implemented"));
 
 	/* there's no DISTINCT in DELETE */
 	qry->distinctClause = NIL;
@@ -1541,6 +1549,7 @@ transformForPortionOfClause(ParseState *pstate,
 		List	   *funcArgs;
 		Node	   *rangeTLEExpr;
 		TargetEntry *tle;
+		RTEPermissionInfo *target_perminfo = pstate->p_target_nsitem->p_perminfo;
 
 		/*
 		 * Whatever operator is used for intersect by temporal foreign keys,
@@ -1590,14 +1599,9 @@ transformForPortionOfClause(ParseState *pstate,
 							  forPortionOf->range_name, false);
 		result->rangeTargetList = lappend(result->rangeTargetList, tle);
 
-		/*
-		 * The range column will change, but you don't need UPDATE permission
-		 * on it, so we don't add to updatedCols here. XXX: If
-		 * https://www.postgresql.org/message-id/CACJufxEtY1hdLcx%3DFhnqp-ERcV1PhbvELG5COy_CZjoEW76ZPQ%40mail.gmail.com
-		 * is merged (only validate CHECK constraints if they depend on one of
-		 * the columns being UPDATEd), we need to make sure that code knows
-		 * that we are updating the application-time column.
-		 */
+		/* Mark the range column as requiring update permissions */
+		target_perminfo->updatedCols = bms_add_member(target_perminfo->updatedCols,
+													  range_attno - FirstLowInvalidHeapAttributeNumber);
 	}
 	else
 		result->rangeTargetList = NIL;
@@ -2867,6 +2871,14 @@ transformUpdateStmt(ParseState *pstate, UpdateStmt *stmt)
 										 stmt->relation->inh,
 										 true,
 										 ACL_UPDATE);
+
+	/* disallow UPDATE ... WHERE CURRENT OF on a view */
+	if (stmt->whereClause &&
+		IsA(stmt->whereClause, CurrentOfExpr) &&
+		pstate->p_target_relation->rd_rel->relkind == RELKIND_VIEW)
+		ereport(ERROR,
+				errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				errmsg("WHERE CURRENT OF on a view is not implemented"));
 
 	if (stmt->forPortionOf)
 		qry->forPortionOf = transformForPortionOfClause(pstate,
