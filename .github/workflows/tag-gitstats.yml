@@ -26,8 +26,8 @@ jobs:
 
     # Check out repository under $GITHUB_WORKSPACE, so the job can access it
     - name: Checkout code
-      uses: actions/checkout@v3
-      with: 
+      uses: actions/checkout@v5
+      with:
           ref: gitstats-report
           #一般我们在 action 中都会先使用 checkout 来检出代码，然后进行操作，checkout action 在检出代码时默认只检出当前事件触发的 commit，而不是所有的 commit，从而导致 history 的丢失。参考 checkout 中的 fetch-depth 说明，如果没有指定 fetch-depth，默认为 1，即只检出最近的一次 commit（参考 git clone —depth 参数）
           fetch-depth: 0 # 没有这个默认不包含提交历史
@@ -35,11 +35,11 @@ jobs:
     # - name: Run log
     #   run: git log
 
-    # Run using Python 3.8 for consistency and aiohttp
-    - name: Set up Python 3.12.7
-      uses: actions/setup-python@v4
+    # Run using Python 3.12 for consistency and aiohttp
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.12.7'
+        python-version: '3.12'
         architecture: 'x64'
         #cache: 'pip'
 
@@ -56,7 +56,7 @@ jobs:
     - name: Generate GitStats Report
       run: |
         # 发现会报错：! [rejected]        v0.0.6-20251216-test -> v0.0.6-20251216-test  (would clobber existing tag)，原因：tag重复导致的，即 fetch-depth: 0 会包含历史提交和tag
-        # https://github.com/yansheng836/dcits-work/actions/runs/20253400159/job/58150173343 
+        # https://github.com/yansheng836/dcits-work/actions/runs/20253400159/job/58150173343
         #git pull origin --tags
         python3 --version
         gitstats ./ ./gitstats-report
