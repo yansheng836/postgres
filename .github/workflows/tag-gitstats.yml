@@ -17,16 +17,13 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Shanghai  # 替代 szenius/set-timezone 第三方 action
 
     steps:
-    - name: Set Beijing Timezone
-      uses: szenius/set-timezone@v1.2
-      with:
-        timezoneLinux: "Asia/Shanghai"
-
     # Check out repository under $GITHUB_WORKSPACE, so the job can access it
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
           ref: gitstats-report
           #一般我们在 action 中都会先使用 checkout 来检出代码，然后进行操作，checkout action 在检出代码时默认只检出当前事件触发的 commit，而不是所有的 commit，从而导致 history 的丢失。参考 checkout 中的 fetch-depth 说明，如果没有指定 fetch-depth，默认为 1，即只检出最近的一次 commit（参考 git clone —depth 参数）
@@ -37,7 +34,7 @@ jobs:
 
     # Run using Python 3.12 for consistency and aiohttp
     - name: Set up Python 3.12
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: '3.12'
         architecture: 'x64'
